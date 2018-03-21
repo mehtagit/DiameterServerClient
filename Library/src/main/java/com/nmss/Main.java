@@ -2,6 +2,7 @@ package com.nmss;
 
 import java.util.concurrent.TimeUnit;
 
+import com.nmss.pojo.NetworkData;
 import com.nmss.pojo.TransactionData;
 
 public class Main {
@@ -14,7 +15,7 @@ public class Main {
 			new Thread(() -> {
 				while (true) {
 					try {
-						TransactionData transactionData = diameterClient.getResponseQueue().take();
+						NetworkData transactionData = diameterClient.getResponseQueue().take();
 						//System.out.println("Recieved At Apache " + transactionData);
 					} catch (Exception e) {
 						e.printStackTrace();

@@ -9,8 +9,11 @@ import java.util.concurrent.TimeUnit;
 import com.nmss.messages.CERMessage;
 import com.nmss.messages.MARMessage;
 import com.nmss.pojo.DiameterServer;
+import com.nmss.pojo.NetworkData;
 import com.nmss.pojo.TransactionData;
 
+import dk.i1.diameter.AVP;
+import dk.i1.diameter.AVP_Grouped;
 import dk.i1.diameter.AVP_Time;
 import dk.i1.diameter.AVP_UTF8String;
 import dk.i1.diameter.AVP_Unsigned32;
@@ -26,7 +29,7 @@ public class Client {
 	private String localIP;
 	private int localPort;
 	private BlockingQueue<TransactionData> requestQueue;
-	private BlockingQueue<TransactionData> responseQueue;
+	private BlockingQueue<NetworkData> responseQueue;
 	private DiameterServer diameterServer;
 
 	public Client(String serverIP, int serverPort, String localIP, int localPort) {
@@ -37,7 +40,7 @@ public class Client {
 	}
 
 	public Client(DiameterServer diameterServer, BlockingQueue<TransactionData> requestQueue,
-			BlockingQueue<TransactionData> responseQueue) {
+			BlockingQueue<NetworkData> responseQueue) {
 		this.requestQueue = requestQueue;
 		this.responseQueue = responseQueue;
 		this.diameterServer = diameterServer;
@@ -206,20 +209,53 @@ public class Client {
 		}
 	}
 
-	public void putResponseQueue() {
+	public void putResponseQueue() 
+	{
 		System.out.println(Thread.currentThread().getName() + " is Started");
-		while (true) {
+		while (true) 
+		{
 			try {
-				Message maa = readFromServer();
-				TransactionData transactionData = new TransactionData();
-				AVP_UTF8String impiAVP = new AVP_UTF8String(maa.find(999));
-				AVP_UTF8String tidAVP = new AVP_UTF8String(maa.find(888));
-				AVP_Time timeAVP = new AVP_Time(maa.find(409));
-				transactionData.setIMPI(impiAVP.queryValue());
-				transactionData.setTid(tidAVP.queryValue());
-				transactionData.setStartTime(timeAVP.queryValue());
-				System.out.println("Received MAR " + transactionData);
-				responseQueue.put(transactionData);
+				Message response = readFromServer();
+				System.out.println("I have read something from server......");
+				int resultCode = new AVP_Unsigned32(response.find(ProtocolConstants.DI_RESULT_CODE)).queryValue();
+				switch(response.hdr.command_code)
+				{
+				case 303:
+					NetworkData responseData  = new NetworkData();
+					String impi = new AVP_UTF8String(response.find(1)).queryValue();
+					String tid = new AVP_UTF8String(response.find(ProtocolConstants.DI_SESSION_ID)).queryValue();
+					if (resultCode == 2001)
+					{
+					//	612 = group
+						responseData.setResult(true);
+						String iteamNumber				="not found";
+						AVP_Grouped data = new AVP_Grouped(response.find(612));
+						AVP allData[] = data.queryAVPs();
+						//allData.
+						responseData.setAuthenticationScheme(new AVP_UTF8String(response.find(608)).queryValue());
+						responseData.setAuthenticate(new AVP_UTF8String(response.find(609)).queryValue());
+						responseData.setAuthorization(new AVP_UTF8String(response.find(610)).queryValue());
+						responseData.setConfidentialityKey(new AVP_UTF8String(response.find(625)).queryValue());
+						responseData.setIntegrityKey(new AVP_UTF8String(response.find(626)).queryValue());
+					}
+					else
+					{
+						responseData.setResult(false);
+					}
+					System.out.println("Received MAR " + responseData);
+					responseQueue.put(responseData);	
+					break;
+				case 257: //CEA
+					System.out.println("Received CEA " + resultCode);
+					break;
+				case 280: //CEA
+					System.out.println("Received DWA " + resultCode);
+					break;
+				default:
+					System.out.println("Some unknown response got : "+response.hdr.command_code);
+					break;
+				}
+				
 			} catch (Exception e) {
 				e.printStackTrace();
 			}

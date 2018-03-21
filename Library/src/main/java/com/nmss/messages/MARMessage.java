@@ -43,15 +43,15 @@ public class MARMessage extends Message {
 		} catch (Exception e) {
 			System.out.println(e);
 		}
-
+		add(new AVP_Unsigned32(ProtocolConstants.DI_AUTH_SESSION_STATE,1));
 		add(new AVP_Address(ProtocolConstants.DI_HOST_IP_ADDRESS, inetaddress));
 		add(new AVP_Unsigned32(ProtocolConstants.DI_AUTH_APPLICATION_ID, AUTH_APP));
 		AVP authdata[] = new AVP[2];
 		authdata[0] = new AVP_Unsigned32(ProtocolConstants.DI_AUTH_APPLICATION_ID, AUTH_APP);
 		authdata[1] = new AVP_Unsigned32(ProtocolConstants.DI_VENDOR_ID, vendor_id);
 		add(new AVP_Grouped(ProtocolConstants.DI_VENDOR_SPECIFIC_APPLICATION_ID, authdata));
-		add(new AVP_UTF8String(999, IMPI));
-		add(new AVP_UTF8String(888, tid));
+		add(new AVP_UTF8String(1, IMPI));
+		add(new AVP_UTF8String(ProtocolConstants.DI_SESSION_ID, tid));
 		add(new AVP_Time(409, new Date()));
 
 		Utils.setMandatory_RFC3588(this);

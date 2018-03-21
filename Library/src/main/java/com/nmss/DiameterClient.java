@@ -11,6 +11,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import com.nmss.client.Client;
 import com.nmss.pojo.DiameterServer;
+import com.nmss.pojo.NetworkData;
 import com.nmss.pojo.TransactionData;
 import com.nmss.util.Config;
 
@@ -19,7 +20,7 @@ public class DiameterClient {
 	private String filename;
 	private List<DiameterServer> diameterServerList;
 	private BlockingQueue<TransactionData> requestQueue;
-	private BlockingQueue<TransactionData> responseQueue;
+	private BlockingQueue<NetworkData> responseQueue;
 
 	public DiameterClient(String filename) throws Exception {
 		diameterServerList = new Config(filename).getConnectionList();
@@ -35,7 +36,7 @@ public class DiameterClient {
 				throw new Exception("Please provide property file");
 			else {
 				requestQueue = new LinkedBlockingDeque<TransactionData>();
-				responseQueue = new LinkedBlockingQueue<TransactionData>();
+				responseQueue = new LinkedBlockingQueue<NetworkData>();
 
 				for (DiameterServer diameterServer : diameterServerList) {
 					Client client = new Client(diameterServer, requestQueue, responseQueue);
@@ -52,7 +53,7 @@ public class DiameterClient {
 		requestQueue.put(transactionData);
 	}
 
-	public BlockingQueue<TransactionData> getResponseQueue() throws Exception {
+	public BlockingQueue<NetworkData> getResponseQueue() throws Exception {
 		return responseQueue;
 	}
 }
