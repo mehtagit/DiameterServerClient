@@ -3,6 +3,7 @@ package com.nmss.client;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.Socket;
+import java.util.Iterator;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -216,27 +217,68 @@ public class Client {
 		{
 			try {
 				Message response = readFromServer();
-				System.out.println("I have read something from server......");
+			//	System.out.println("I have read something from server......");
 				int resultCode = new AVP_Unsigned32(response.find(ProtocolConstants.DI_RESULT_CODE)).queryValue();
 				switch(response.hdr.command_code)
 				{
 				case 303:
 					NetworkData responseData  = new NetworkData();
-					String impi = new AVP_UTF8String(response.find(1)).queryValue();
-					String tid = new AVP_UTF8String(response.find(ProtocolConstants.DI_SESSION_ID)).queryValue();
+					responseData.setImpi(new AVP_UTF8String(response.find(1)).queryValue());
+					responseData.setTid(new AVP_UTF8String(response.find(ProtocolConstants.DI_SESSION_ID)).queryValue());
 					if (resultCode == 2001)
 					{
 					//	612 = group
 						responseData.setResult(true);
 						String iteamNumber				="not found";
+						AVP allData[] = null;
+					/*	for (AVP avp :response.avps())
+						{
+							System.out.println("from loop : "+avp.code);
+						}*/
 						AVP_Grouped data = new AVP_Grouped(response.find(612));
-						AVP allData[] = data.queryAVPs();
-						//allData.
+						allData = data.queryAVPs();
+						//System.out.println("using find method : "+allData);
+						
+						//Iterator<AVP> iterator = response.avps();
+						for (int i = 0 ; i<allData.length ; i++)
+						{
+							if (allData[i].code == 608)
+							{
+								//AVP_UTF8String dd = (AVP_UTF8String) allData[i];
+								//responseData.setAuthenticationScheme(dd.queryValue());
+								responseData.setAuthenticationScheme(new String(allData[i].queryPayload()));
+							}
+							else if (allData[i].code == 609)
+							{
+								responseData.setAuthenticate(new String(allData[i].queryPayload()));
+							}
+							else if	(allData[i].code == 610)
+							{
+								//AVP_UTF8String dd = (AVP_UTF8String) allData[i];
+								responseData.setAuthorization(new String(allData[i].queryPayload()));
+							}
+							else if	(allData[i].code == 625)
+							{
+								//AVP_UTF8String dd = (AVP_UTF8String) allData[i];
+								responseData.setConfidentialityKey(new String(allData[i].queryPayload()));
+							}
+							else if	(allData[i].code == 626)
+							{
+								//AVP_UTF8String dd = (AVP_UTF8String) allData[i];
+								responseData.setIntegrityKey(new String(allData[i].queryPayload()));
+							}
+							else
+							{
+								System.out.println("something else avp is received ["+allData[i].code+"]");
+							}
+								
+						}/*
 						responseData.setAuthenticationScheme(new AVP_UTF8String(response.find(608)).queryValue());
 						responseData.setAuthenticate(new AVP_UTF8String(response.find(609)).queryValue());
 						responseData.setAuthorization(new AVP_UTF8String(response.find(610)).queryValue());
 						responseData.setConfidentialityKey(new AVP_UTF8String(response.find(625)).queryValue());
 						responseData.setIntegrityKey(new AVP_UTF8String(response.find(626)).queryValue());
+						*/
 					}
 					else
 					{
