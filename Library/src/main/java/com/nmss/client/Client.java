@@ -6,8 +6,11 @@ import java.net.Socket;
 import java.util.Iterator;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.nmss.messages.CERMessage;
+import com.nmss.messages.DPRMessage;
+import com.nmss.messages.DWRMessage;
 import com.nmss.messages.MARMessage;
 import com.nmss.pojo.DiameterServer;
 import com.nmss.pojo.NetworkData;
@@ -32,12 +35,15 @@ public class Client {
 	private BlockingQueue<TransactionData> requestQueue;
 	private BlockingQueue<NetworkData> responseQueue;
 	private DiameterServer diameterServer;
+	private long lastRequestSend;
+	private AtomicInteger window;
 
 	public Client(String serverIP, int serverPort, String localIP, int localPort) {
 		this.serverIP = serverIP;
 		this.serverPort = serverPort;
 		this.localIP = localIP;
 		this.localPort = localPort;
+		this.window = new AtomicInteger(0);
 	}
 
 	public Client(DiameterServer diameterServer, BlockingQueue<TransactionData> requestQueue,
@@ -49,6 +55,7 @@ public class Client {
 		this.serverPort = diameterServer.getDestinationPort();
 		this.localIP = diameterServer.getOriginIp();
 		this.localPort = diameterServer.getOriginPort();
+		this.window = new AtomicInteger(0);
 	}
 
 	public void disConnect() {
@@ -174,7 +181,7 @@ public class Client {
 				sendRequest(cerMessage);
 				System.out.println("Send CER");
 				Message cea = readFromServer();
-				System.out.println("Receive CER");
+				System.out.println("Receive CEA");
 				try {
 					AVP_Unsigned32 resultAvp = new AVP_Unsigned32(cea.find(ProtocolConstants.DI_RESULT_CODE));
 					isCerSuccess = resultAvp.queryValue() == ProtocolConstants.DIAMETER_RESULT_SUCCESS;
@@ -184,6 +191,11 @@ public class Client {
 				TimeUnit.SECONDS.sleep(5);
 			}
 
+			// Start DWR Thread
+			Thread dwrThread = new Thread(this::dwrTask);
+			dwrThread.setDaemon(true);
+			dwrThread.start();
+
 			new Thread(this::readRequestQueue, Thread.currentThread().getName() + "_RequestThread").start();
 			new Thread(this::putResponseQueue, Thread.currentThread().getName() + "_ResponseThread").start();
 
@@ -191,6 +203,23 @@ public class Client {
 			e.printStackTrace();
 		}
 		System.out.println(Thread.currentThread().getName() + " is ended");
+	}
+
+	public void dwrTask() {
+		System.out.println(Thread.currentThread().getName() + " DWR Started");
+		while (true) {
+			try {
+				if (((System.currentTimeMillis() - lastRequestSend) / 1000) > 10) {
+					DWRMessage dwrMessage = new DWRMessage(diameterServer.getOriginIp(),
+							diameterServer.getOriginRelam(), diameterServer.getDestinationIP(),
+							diameterServer.getDestinationRelam());
+					sendRequest(dwrMessage);
+				}
+				TimeUnit.SECONDS.sleep(5);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
 	}
 
 	public void readRequestQueue() {
@@ -203,6 +232,10 @@ public class Client {
 						diameterServer.getVendorId(), diameterServer.getAuthApp(), transactionData.getIMPI(),
 						transactionData.getTid());
 				sendRequest(mar);
+				/* for DWR */
+				this.lastRequestSend = System.currentTimeMillis();
+				window.incrementAndGet();
+
 				System.out.println("Send MAR " + transactionData);
 			} catch (Exception e) {
 				e.printStackTrace();
@@ -210,97 +243,98 @@ public class Client {
 		}
 	}
 
-	public void putResponseQueue() 
-	{
+	public void putResponseQueue() {
 		System.out.println(Thread.currentThread().getName() + " is Started");
-		while (true) 
-		{
+		while (true) {
 			try {
 				Message response = readFromServer();
-			//	System.out.println("I have read something from server......");
+				// System.out.println("I have read something from server......");
 				int resultCode = new AVP_Unsigned32(response.find(ProtocolConstants.DI_RESULT_CODE)).queryValue();
-				switch(response.hdr.command_code)
-				{
+				switch (response.hdr.command_code) {
 				case 303:
-					NetworkData responseData  = new NetworkData();
+					NetworkData responseData = new NetworkData();
 					responseData.setImpi(new AVP_UTF8String(response.find(1)).queryValue());
-					responseData.setTid(new AVP_UTF8String(response.find(ProtocolConstants.DI_SESSION_ID)).queryValue());
-					if (resultCode == 2001)
-					{
-					//	612 = group
+					responseData
+							.setTid(new AVP_UTF8String(response.find(ProtocolConstants.DI_SESSION_ID)).queryValue());
+					if (resultCode == 2001) {
+						// 612 = group
 						responseData.setResult(true);
-						String iteamNumber				="not found";
+						String iteamNumber = "not found";
 						AVP allData[] = null;
-					/*	for (AVP avp :response.avps())
-						{
-							System.out.println("from loop : "+avp.code);
-						}*/
+						/*
+						 * for (AVP avp :response.avps()) { System.out.println("from loop : "+avp.code);
+						 * }
+						 */
 						AVP_Grouped data = new AVP_Grouped(response.find(612));
 						allData = data.queryAVPs();
-						//System.out.println("using find method : "+allData);
-						
-						//Iterator<AVP> iterator = response.avps();
-						for (int i = 0 ; i<allData.length ; i++)
-						{
-							if (allData[i].code == 608)
-							{
-								//AVP_UTF8String dd = (AVP_UTF8String) allData[i];
-								//responseData.setAuthenticationScheme(dd.queryValue());
+						// System.out.println("using find method : "+allData);
+
+						// Iterator<AVP> iterator = response.avps();
+						for (int i = 0; i < allData.length; i++) {
+							if (allData[i].code == 608) {
+								// AVP_UTF8String dd = (AVP_UTF8String) allData[i];
+								// responseData.setAuthenticationScheme(dd.queryValue());
 								responseData.setAuthenticationScheme(new String(allData[i].queryPayload()));
-							}
-							else if (allData[i].code == 609)
-							{
+							} else if (allData[i].code == 609) {
 								responseData.setAuthenticate(new String(allData[i].queryPayload()));
-							}
-							else if	(allData[i].code == 610)
-							{
-								//AVP_UTF8String dd = (AVP_UTF8String) allData[i];
+							} else if (allData[i].code == 610) {
+								// AVP_UTF8String dd = (AVP_UTF8String) allData[i];
 								responseData.setAuthorization(new String(allData[i].queryPayload()));
-							}
-							else if	(allData[i].code == 625)
-							{
-								//AVP_UTF8String dd = (AVP_UTF8String) allData[i];
+							} else if (allData[i].code == 625) {
+								// AVP_UTF8String dd = (AVP_UTF8String) allData[i];
 								responseData.setConfidentialityKey(new String(allData[i].queryPayload()));
-							}
-							else if	(allData[i].code == 626)
-							{
-								//AVP_UTF8String dd = (AVP_UTF8String) allData[i];
+							} else if (allData[i].code == 626) {
+								// AVP_UTF8String dd = (AVP_UTF8String) allData[i];
 								responseData.setIntegrityKey(new String(allData[i].queryPayload()));
+							} else {
+								System.out.println("something else avp is received [" + allData[i].code + "]");
 							}
-							else
-							{
-								System.out.println("something else avp is received ["+allData[i].code+"]");
-							}
-								
-						}/*
-						responseData.setAuthenticationScheme(new AVP_UTF8String(response.find(608)).queryValue());
-						responseData.setAuthenticate(new AVP_UTF8String(response.find(609)).queryValue());
-						responseData.setAuthorization(new AVP_UTF8String(response.find(610)).queryValue());
-						responseData.setConfidentialityKey(new AVP_UTF8String(response.find(625)).queryValue());
-						responseData.setIntegrityKey(new AVP_UTF8String(response.find(626)).queryValue());
-						*/
-					}
-					else
-					{
+
+						} /*
+							 * responseData.setAuthenticationScheme(new
+							 * AVP_UTF8String(response.find(608)).queryValue());
+							 * responseData.setAuthenticate(new
+							 * AVP_UTF8String(response.find(609)).queryValue());
+							 * responseData.setAuthorization(new
+							 * AVP_UTF8String(response.find(610)).queryValue());
+							 * responseData.setConfidentialityKey(new
+							 * AVP_UTF8String(response.find(625)).queryValue());
+							 * responseData.setIntegrityKey(new
+							 * AVP_UTF8String(response.find(626)).queryValue());
+							 */
+					} else {
 						responseData.setResult(false);
 					}
 					System.out.println("Received MAR " + responseData);
-					responseQueue.put(responseData);	
+					responseQueue.put(responseData);
 					break;
-				case 257: //CEA
+				case 257: // CEA
 					System.out.println("Received CEA " + resultCode);
+
 					break;
-				case 280: //CEA
+				case 282: // DPA
+					System.out.println("Received DPA " + resultCode);
+					break;
+				case 280: // DWA
 					System.out.println("Received DWA " + resultCode);
+					if (resultCode == 2001) {
+
+					} else {
+						DPRMessage dprMessage = new DPRMessage(diameterServer.getOriginIp(),
+								diameterServer.getOriginRelam(), 2);
+						sendRequest(dprMessage);
+					}
+
 					break;
 				default:
-					System.out.println("Some unknown response got : "+response.hdr.command_code);
+					System.out.println("Some unknown response got : " + response.hdr.command_code);
 					break;
 				}
-				
+
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}
 	}
+
 }

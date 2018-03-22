@@ -6,8 +6,12 @@ import java.net.Socket;
 
 import com.nmss.messages.CERMessage;
 
+import dk.i1.diameter.AVP;
+import dk.i1.diameter.AVP_Grouped;
+import dk.i1.diameter.AVP_OctetString;
 import dk.i1.diameter.AVP_Unsigned32;
 import dk.i1.diameter.Message;
+import dk.i1.diameter.ProtocolConstants;
 
 public class ServerRequestHandler {
 	public Socket socket;
@@ -23,11 +27,16 @@ public class ServerRequestHandler {
 				Message cerMessage = new Message();
 				cerMessage.decode(request);
 				cerMessage.hdr.setRequest(false);
-
+				AVP group[] = new AVP[5];
+				group[0] = new AVP_OctetString(608, "32".getBytes());
+				group[1] = new AVP_OctetString(609, "33".getBytes());
+				group[2] = new AVP_OctetString(610, "34".getBytes());
+				group[3] = new AVP_OctetString(625, "35".getBytes());
+				group[4] = new AVP_OctetString(626, "36".getBytes());
+				cerMessage.add(new AVP_Grouped(612, group));
 				cerMessage.add(new AVP_Unsigned32(268, 2001));
-
 				outToClient.write(cerMessage.encode());
-
+				System.out.println("Send Response");
 			} catch (Exception exception) {
 				exception.printStackTrace();
 			} finally {
@@ -46,7 +55,9 @@ public class ServerRequestHandler {
 		byte data[] = new byte[20000];
 		byte total_data[] = null;
 		try {
-			in.read(data, 0, 1);
+			while (in.read(data, 0, 1) == -1) {
+				continue;
+			}
 			in.read(data, 1, 3);
 			version[0] = data[0];
 			length[0] = data[1];
