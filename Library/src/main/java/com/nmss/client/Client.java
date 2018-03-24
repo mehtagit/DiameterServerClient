@@ -3,10 +3,12 @@ package com.nmss.client;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.Socket;
-import java.util.Iterator;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import com.nmss.messages.CERMessage;
 import com.nmss.messages.DPRMessage;
@@ -18,13 +20,14 @@ import com.nmss.pojo.TransactionData;
 
 import dk.i1.diameter.AVP;
 import dk.i1.diameter.AVP_Grouped;
-import dk.i1.diameter.AVP_Time;
 import dk.i1.diameter.AVP_UTF8String;
 import dk.i1.diameter.AVP_Unsigned32;
 import dk.i1.diameter.Message;
 import dk.i1.diameter.ProtocolConstants;
 
 public class Client {
+	Logger logger = LogManager.getLogger(Client.class);
+
 	private Socket clientSocket;
 	private DataInputStream in;
 	private DataOutputStream out;
@@ -44,6 +47,7 @@ public class Client {
 		this.localIP = localIP;
 		this.localPort = localPort;
 		this.window = new AtomicInteger(0);
+		logger.debug(this + " object created successfully ");
 	}
 
 	public Client(DiameterServer diameterServer, BlockingQueue<TransactionData> requestQueue,
@@ -56,6 +60,7 @@ public class Client {
 		this.localIP = diameterServer.getOriginIp();
 		this.localPort = diameterServer.getOriginPort();
 		this.window = new AtomicInteger(0);
+		logger.debug(this + " object created successfully ");
 	}
 
 	public void disConnect() {
@@ -66,9 +71,9 @@ public class Client {
 			clientSocket.shutdownOutput();
 			clientSocket.close();
 
-			System.out.println("disconnected from  server....");
+			logger.info("Disconnected from server " + this);
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error(this + e.getMessage(), e);
 		}
 	}
 
@@ -79,10 +84,10 @@ public class Client {
 			clientSocket = new Socket(serverIP, serverPort);
 			in = new DataInputStream(clientSocket.getInputStream());
 			out = new DataOutputStream(clientSocket.getOutputStream());
-			System.out.println("connection created with server....");
+			logger.info("Connection Created " + this);
 			return true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error(this + e.getMessage(), e);
 			return false;
 		}
 	}
@@ -92,7 +97,7 @@ public class Client {
 			out.write(message.encode());
 			out.flush();
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error(this + e.getMessage(), e);
 		}
 	}
 
@@ -122,7 +127,7 @@ public class Client {
 			}
 
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error(this + e.getMessage(), e);
 		}
 		Message message = new Message();
 		message.decode(total_data);
@@ -166,7 +171,7 @@ public class Client {
 	}
 
 	public void start() {
-		System.out.println(Thread.currentThread().getName() + " is Started");
+		logger.info(Thread.currentThread().getName() + " trying to make connection");
 		try {
 			while (!connect()) {
 				TimeUnit.SECONDS.sleep(5);
@@ -179,9 +184,9 @@ public class Client {
 						diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
 						diameterServer.getVendorId(), diameterServer.getProduct(), diameterServer.getAuthApp());
 				sendRequest(cerMessage);
-				System.out.println("Send CER");
+				logger.info("Send CER : " + cerMessage);
 				Message cea = readFromServer();
-				System.out.println("Receive CEA");
+				logger.info("Receive CER : " + cea);
 				try {
 					AVP_Unsigned32 resultAvp = new AVP_Unsigned32(cea.find(ProtocolConstants.DI_RESULT_CODE));
 					isCerSuccess = resultAvp.queryValue() == ProtocolConstants.DIAMETER_RESULT_SUCCESS;
@@ -200,30 +205,31 @@ public class Client {
 			new Thread(this::putResponseQueue, Thread.currentThread().getName() + "_ResponseThread").start();
 
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error(this + e.getMessage(), e);
 		}
-		System.out.println(Thread.currentThread().getName() + " is ended");
 	}
 
 	public void dwrTask() {
-		System.out.println(Thread.currentThread().getName() + " DWR Started");
+		logger.info("DWR Thread Started " + this);
 		while (true) {
 			try {
 				if (((System.currentTimeMillis() - lastRequestSend) / 1000) > 10) {
 					DWRMessage dwrMessage = new DWRMessage(diameterServer.getOriginIp(),
 							diameterServer.getOriginRelam(), diameterServer.getDestinationIP(),
 							diameterServer.getDestinationRelam());
+					logger.info("Send DWR : " + dwrMessage);
 					sendRequest(dwrMessage);
+
 				}
 				TimeUnit.SECONDS.sleep(5);
 			} catch (Exception e) {
-				e.printStackTrace();
+				logger.error(this + e.getMessage(), e);
 			}
 		}
 	}
 
 	public void readRequestQueue() {
-		System.out.println(Thread.currentThread().getName() + " is Started");
+		logger.info("Request Thread From Client to Server Started : " + this);
 		while (true) {
 			try {
 				TransactionData transactionData = requestQueue.take();
@@ -231,27 +237,28 @@ public class Client {
 						diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
 						diameterServer.getVendorId(), diameterServer.getAuthApp(), transactionData.getIMPI(),
 						transactionData.getTid());
+				logger.info("Send MAR : " + mar);
 				sendRequest(mar);
 				/* for DWR */
 				this.lastRequestSend = System.currentTimeMillis();
 				window.incrementAndGet();
+				logger.debug("windo incremented " + window.get());
 
-				System.out.println("Send MAR " + transactionData);
 			} catch (Exception e) {
-				e.printStackTrace();
+				logger.error(this + e.getMessage(), e);
 			}
 		}
 	}
 
 	public void putResponseQueue() {
-		System.out.println(Thread.currentThread().getName() + " is Started");
+		logger.info("Receiver Thread From Server to Client Started : " + this);
 		while (true) {
 			try {
 				Message response = readFromServer();
 				// System.out.println("I have read something from server......");
 				int resultCode = new AVP_Unsigned32(response.find(ProtocolConstants.DI_RESULT_CODE)).queryValue();
 				switch (response.hdr.command_code) {
-				case 303:
+				case ProtocolConstants.DIAMETER_MULTIMEDIA_AUTHENTICATION_REQUEST:
 					NetworkData responseData = new NetworkData();
 					responseData.setImpi(new AVP_UTF8String(response.find(1)).queryValue());
 					responseData
@@ -305,36 +312,44 @@ public class Client {
 					} else {
 						responseData.setResult(false);
 					}
-					System.out.println("Received MAR " + responseData);
+					logger.info("Received MAR " + response);
 					responseQueue.put(responseData);
 					break;
-				case 257: // CEA
-					System.out.println("Received CEA " + resultCode);
+				case ProtocolConstants.DIAMETER_COMMAND_CAPABILITIES_EXCHANGE:
+					logger.info("Received CEA " + response);
 
 					break;
-				case 282: // DPA
-					System.out.println("Received DPA " + resultCode);
+				case ProtocolConstants.DIAMETER_COMMAND_DISCONNECT_PEER: // DPA
+					logger.info("Received DPA " + response);
 					break;
-				case 280: // DWA
-					System.out.println("Received DWA " + resultCode);
+				case ProtocolConstants.DIAMETER_COMMAND_DEVICE_WATCHDOG: // DWA
+					logger.info("Received DWA " + response);
 					if (resultCode == 2001) {
 
 					} else {
 						DPRMessage dprMessage = new DPRMessage(diameterServer.getOriginIp(),
 								diameterServer.getOriginRelam(), 2);
+						logger.info("Send DPR " + dprMessage);
 						sendRequest(dprMessage);
+
 					}
 
 					break;
 				default:
-					System.out.println("Some unknown response got : " + response.hdr.command_code);
+					logger.warn("Some unknown response got : " + response.hdr.command_code);
 					break;
 				}
 
 			} catch (Exception e) {
-				e.printStackTrace();
+				logger.error(this + e.getMessage(), e);
 			}
 		}
+	}
+
+	@Override
+	public String toString() {
+		return "Client [serverIP=" + serverIP + ", serverPort=" + serverPort + ", localIP=" + localIP + ", localPort="
+				+ localPort + ", diameterServer=" + diameterServer + "]";
 	}
 
 }

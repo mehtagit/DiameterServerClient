@@ -4,6 +4,10 @@ import java.io.DataOutputStream;
 import java.io.InputStream;
 import java.net.Socket;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import com.nmss.client.Client;
 import com.nmss.messages.CERMessage;
 
 import dk.i1.diameter.AVP;
@@ -16,6 +20,7 @@ import dk.i1.diameter.ProtocolConstants;
 public class ServerRequestHandler {
 	public Socket socket;
 	private InputStream in;
+	Logger logger = LogManager.getLogger(ServerRequestHandler.class);
 
 	public void start() {
 		while (true) {
@@ -36,7 +41,7 @@ public class ServerRequestHandler {
 				cerMessage.add(new AVP_Grouped(612, group));
 				cerMessage.add(new AVP_Unsigned32(268, 2001));
 				outToClient.write(cerMessage.encode());
-				System.out.println("Send Response");
+				logger.info("Send Response ");
 			} catch (Exception exception) {
 				exception.printStackTrace();
 			} finally {

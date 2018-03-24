@@ -27,7 +27,7 @@ public class MARMessage extends Message {
 	public MARMessage(String ORIGIN_HOST, String ORIGIN_REALM, String DESTINATION_HOST, String DESTINATION_REALM,
 			int vendor_id, int AUTH_APP, String IMPI, String tid) {
 		super.hdr.setRequest(true);
-		super.hdr.command_code = 303;
+		super.hdr.command_code = ProtocolConstants.DIAMETER_MULTIMEDIA_AUTHENTICATION_REQUEST;
 		super.hdr.application_id = 0;
 		super.hdr.hop_by_hop_identifier = (new Random()).nextInt();
 
@@ -43,7 +43,7 @@ public class MARMessage extends Message {
 		} catch (Exception e) {
 			System.out.println(e);
 		}
-		add(new AVP_Unsigned32(ProtocolConstants.DI_AUTH_SESSION_STATE,1));
+		add(new AVP_Unsigned32(ProtocolConstants.DI_AUTH_SESSION_STATE, 1));
 		add(new AVP_Address(ProtocolConstants.DI_HOST_IP_ADDRESS, inetaddress));
 		add(new AVP_Unsigned32(ProtocolConstants.DI_AUTH_APPLICATION_ID, AUTH_APP));
 		AVP authdata[] = new AVP[2];

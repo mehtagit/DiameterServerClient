@@ -7,11 +7,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import com.nmss.client.Client;
 import com.nmss.pojo.DiameterServer;
 
 public class Config {
 
 	private List<DiameterServer> connectionList = new ArrayList<>();
+	Logger logger = LogManager.getLogger(Config.class);
 
 	public Config(String filename) throws Exception {
 		//////////// Reading properties////////////////////////////////
@@ -41,7 +46,7 @@ public class Config {
 					throw new Exception(
 							"destination-port , origin-port , vendor-id and auth-app in property file must be integer");
 				}
-				System.out.println(diameterServer);
+				logger.info("Read Config " + diameterServer);
 				connectionList.add(diameterServer);
 			}
 		} catch (IOException e) {
