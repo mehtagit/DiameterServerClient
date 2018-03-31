@@ -286,10 +286,4 @@ public class AVP {
 		vendor_id = a.vendor_id;
 	}
 
-	@Override
-	public String toString() {
-		return "AVP [payload=" + Arrays.toString(payload) + ", code=" + code + ", flags=" + flags + ", vendor_id="
-				+ vendor_id + "]";
-	}
-
 }

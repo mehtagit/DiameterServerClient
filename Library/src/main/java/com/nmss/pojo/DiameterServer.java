@@ -7,6 +7,7 @@ import java.util.Properties;
 
 public class DiameterServer {
 
+	private String clientId;
 	private String destinationIP;
 	private Integer destinationPort;
 	private String destinationRelam;
@@ -17,6 +18,7 @@ public class DiameterServer {
 	private String applicationId;
 	private String product;
 	private Integer authApp;
+	private boolean isDigestTrueGbuFalse;
 
 	public String getDestinationIP() {
 		return destinationIP;
@@ -98,12 +100,29 @@ public class DiameterServer {
 		this.authApp = authApp;
 	}
 
+	public String getClientId() {
+		return clientId;
+	}
+
+	public void setClientId(String clientId) {
+		this.clientId = clientId;
+	}
+
+	public boolean isDigestTrueGbuFalse() {
+		return isDigestTrueGbuFalse;
+	}
+
+	public void setDigestTrueGbuFalse(boolean isDigestTrueGbuFalse) {
+		this.isDigestTrueGbuFalse = isDigestTrueGbuFalse;
+	}
+
 	@Override
 	public String toString() {
-		return "DiameterServer [destinationIP=" + destinationIP + ", destinationPort=" + destinationPort
-				+ ", destinationRelam=" + destinationRelam + ", originIp=" + originIp + ", originPort=" + originPort
-				+ ", originRelam=" + originRelam + ", vendorId=" + vendorId + ", applicationId=" + applicationId
-				+ ", product=" + product + ", authApp=" + authApp + "]";
+		return "DiameterServer [clientId=" + clientId + ", destinationIP=" + destinationIP + ", destinationPort="
+				+ destinationPort + ", destinationRelam=" + destinationRelam + ", originIp=" + originIp
+				+ ", originPort=" + originPort + ", originRelam=" + originRelam + ", vendorId=" + vendorId
+				+ ", applicationId=" + applicationId + ", product=" + product + ", authApp=" + authApp
+				+ ", isDigestTrueGbuFalse=" + isDigestTrueGbuFalse + "]";
 	}
 
 }

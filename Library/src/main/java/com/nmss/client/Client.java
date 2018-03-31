@@ -10,13 +10,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.nmss.DiameterClient;
 import com.nmss.messages.CERMessage;
 import com.nmss.messages.DPRMessage;
 import com.nmss.messages.DWRMessage;
 import com.nmss.messages.MARMessage;
 import com.nmss.pojo.DiameterServer;
-import com.nmss.pojo.NetworkData;
-import com.nmss.pojo.TransactionData;
+import com.nmss.pojo.Stats;
+import com.nmss.pojo.DiameterData;
+import com.nmss.util.CdrWriter;
+import com.nmss.util.Config;
 
 import dk.i1.diameter.AVP;
 import dk.i1.diameter.AVP_Grouped;
@@ -26,7 +29,7 @@ import dk.i1.diameter.Message;
 import dk.i1.diameter.ProtocolConstants;
 
 public class Client {
-	Logger logger = LogManager.getLogger(Client.class);
+	private Logger logger = LogManager.getLogger(Client.class);
 
 	private Socket clientSocket;
 	private DataInputStream in;
@@ -35,11 +38,14 @@ public class Client {
 	private int serverPort;
 	private String localIP;
 	private int localPort;
-	private BlockingQueue<TransactionData> requestQueue;
-	private BlockingQueue<NetworkData> responseQueue;
+	private BlockingQueue<DiameterData> requestQueue;
+	private BlockingQueue<DiameterData> responseQueue;
+	private BlockingQueue<Stats> statsQueue;
 	private DiameterServer diameterServer;
 	private long lastRequestSend;
 	private AtomicInteger window;
+	private Boolean isMonitorThreadRunning;
+	private Stats stats;
 
 	public Client(String serverIP, int serverPort, String localIP, int localPort) {
 		this.serverIP = serverIP;
@@ -47,23 +53,29 @@ public class Client {
 		this.localIP = localIP;
 		this.localPort = localPort;
 		this.window = new AtomicInteger(0);
+		this.isMonitorThreadRunning = false;
 		logger.debug(this + " object created successfully ");
 	}
 
-	public Client(DiameterServer diameterServer, BlockingQueue<TransactionData> requestQueue,
-			BlockingQueue<NetworkData> responseQueue) {
+	public Client(DiameterServer diameterServer, BlockingQueue<DiameterData> requestQueue,
+			BlockingQueue<DiameterData> responseQueue, BlockingQueue<Stats> statsQueue) {
 		this.requestQueue = requestQueue;
 		this.responseQueue = responseQueue;
+		this.statsQueue = statsQueue;
 		this.diameterServer = diameterServer;
 		this.serverIP = diameterServer.getDestinationIP();
 		this.serverPort = diameterServer.getDestinationPort();
 		this.localIP = diameterServer.getOriginIp();
 		this.localPort = diameterServer.getOriginPort();
 		this.window = new AtomicInteger(0);
+		this.isMonitorThreadRunning = false;
+		this.lastRequestSend = System.currentTimeMillis();
+		this.stats = new Stats(diameterServer.getOriginRelam());
+		new Thread(this::statsMonitor, Thread.currentThread().getName() + "-Stats").start();
 		logger.debug(this + " object created successfully ");
 	}
 
-	public void disConnect() {
+	private void disConnect() {
 		try {
 			// in.close();
 			// out.close();
@@ -78,6 +90,7 @@ public class Client {
 	}
 
 	private boolean connect() {
+		boolean isConnected = false;
 		try {
 			// clientSocket = new Socket(serverIP, serverPort,
 			// InetAddress.getByName(localIP), localPort);
@@ -85,14 +98,15 @@ public class Client {
 			in = new DataInputStream(clientSocket.getInputStream());
 			out = new DataOutputStream(clientSocket.getOutputStream());
 			logger.info("Connection Created " + this);
-			return true;
+			isConnected = true;
 		} catch (Exception e) {
 			logger.error(this + e.getMessage(), e);
-			return false;
+			isConnected = false;
 		}
+		return isConnected;
 	}
 
-	public void sendRequest(Message message) {
+	private void sendMessage(Message message) {
 		try {
 			out.write(message.encode());
 			out.flush();
@@ -101,7 +115,7 @@ public class Client {
 		}
 	}
 
-	public Message readFromServer() {
+	private Message readMessage() {
 		byte length[] = new byte[3];
 		byte version[] = new byte[1];
 		byte data[] = new byte[20000];
@@ -134,7 +148,7 @@ public class Client {
 		return message;
 	}
 
-	public int readComplete(int total_length_to_receive, byte data[], int startIndex, int count) throws Exception {
+	private int readComplete(int total_length_to_receive, byte data[], int startIndex, int count) throws Exception {
 		int readed = in.read(data, startIndex, total_length_to_receive);
 		count = count + readed;
 		if (readed == total_length_to_receive) {
@@ -150,7 +164,7 @@ public class Client {
 		return count;
 	}
 
-	public String convertToHex(byte[] data) {
+	private String convertToHex(byte[] data) {
 		StringBuffer buf = new StringBuffer();
 		for (int i = 0; i < data.length; i++) {
 			int halfbyte = (data[i] >>> 4) & 0x0F;
@@ -166,59 +180,73 @@ public class Client {
 		return buf.toString();
 	}
 
-	public int convertToInt(String data) {
+	private int convertToInt(String data) {
 		return Integer.parseInt(data, 16);
 	}
 
-	public void start() {
-		logger.info(Thread.currentThread().getName() + " trying to make connection");
-		try {
-			while (!connect()) {
-				TimeUnit.SECONDS.sleep(5);
-			}
-
-			boolean isCerSuccess = false;
-			while (!isCerSuccess) {
-
-				CERMessage cerMessage = new CERMessage(diameterServer.getOriginIp(), diameterServer.getOriginRelam(),
-						diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
-						diameterServer.getVendorId(), diameterServer.getProduct(), diameterServer.getAuthApp());
-				sendRequest(cerMessage);
-				logger.info("Send CER : " + cerMessage);
-				Message cea = readFromServer();
-				logger.info("Receive CER : " + cea);
-				try {
-					AVP_Unsigned32 resultAvp = new AVP_Unsigned32(cea.find(ProtocolConstants.DI_RESULT_CODE));
-					isCerSuccess = resultAvp.queryValue() == ProtocolConstants.DIAMETER_RESULT_SUCCESS;
-				} catch (Exception e) {
-					e.printStackTrace();
+	public void monitor() {
+		logger.info(Thread.currentThread().getName() + " Started ");
+		if (!isMonitorThreadRunning) {
+			isMonitorThreadRunning = true;
+			logger.info(this + " trying to make connection");
+			try {
+				while (!connect()) {
+					TimeUnit.SECONDS.sleep(5);
+					logger.info(this + " trying to make connection");
 				}
-				TimeUnit.SECONDS.sleep(5);
+
+				boolean isCerSuccess = false;
+				while (!isCerSuccess) {
+
+					CERMessage cerMessage = new CERMessage(diameterServer.getOriginIp(),
+							diameterServer.getOriginRelam(), diameterServer.getDestinationIP(),
+							diameterServer.getDestinationRelam(), diameterServer.getVendorId(),
+							diameterServer.getProduct(), diameterServer.getAuthApp());
+					sendMessage(cerMessage);
+					logger.info("CER : " + cerMessage);
+					Message cea = readMessage();
+					logger.info("CEA : " + cea);
+					try {
+						AVP_Unsigned32 resultAvp = new AVP_Unsigned32(cea.find(ProtocolConstants.DI_RESULT_CODE));
+						isCerSuccess = resultAvp.queryValue() == ProtocolConstants.DIAMETER_RESULT_SUCCESS;
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+					TimeUnit.SECONDS.sleep(5);
+				}
+
+				/* Monitor Thread is connected successfully no connection monitoring is off */
+				isMonitorThreadRunning = false;
+				// Start DWR Thread
+				Thread dwrThread = new Thread(this::dwrTask, Thread.currentThread().getName() + "-DWR");
+				dwrThread.setDaemon(true);
+				dwrThread.start();
+
+				new Thread(this::writeInToServerStream, Thread.currentThread().getName() + "-HSSWrite").start();
+				new Thread(this::readFromServerStream, Thread.currentThread().getName() + "-HSSRead").start();
+
+			} catch (Exception e) {
+				logger.error(this + e.getMessage(), e);
 			}
-
-			// Start DWR Thread
-			Thread dwrThread = new Thread(this::dwrTask);
-			dwrThread.setDaemon(true);
-			dwrThread.start();
-
-			new Thread(this::readRequestQueue, Thread.currentThread().getName() + "_RequestThread").start();
-			new Thread(this::putResponseQueue, Thread.currentThread().getName() + "_ResponseThread").start();
-
-		} catch (Exception e) {
-			logger.error(this + e.getMessage(), e);
 		}
 	}
 
-	public void dwrTask() {
-		logger.info("DWR Thread Started " + this);
+	private void dwrTask() {
+		logger.info(Thread.currentThread().getName() + " Started ");
 		while (true) {
+			/* if connection breaks */
+			if (isMonitorThreadRunning) {
+				logger.info("DWR Thread Stopped " + this);
+				break;
+			}
+
 			try {
 				if (((System.currentTimeMillis() - lastRequestSend) / 1000) > 10) {
 					DWRMessage dwrMessage = new DWRMessage(diameterServer.getOriginIp(),
 							diameterServer.getOriginRelam(), diameterServer.getDestinationIP(),
 							diameterServer.getDestinationRelam());
 					logger.info("Send DWR : " + dwrMessage);
-					sendRequest(dwrMessage);
+					sendMessage(dwrMessage);
 
 				}
 				TimeUnit.SECONDS.sleep(5);
@@ -228,110 +256,91 @@ public class Client {
 		}
 	}
 
-	public void readRequestQueue() {
-		logger.info("Request Thread From Client to Server Started : " + this);
+	private void writeInToServerStream() {
+		logger.info(Thread.currentThread().getName() + " Started ");
 		while (true) {
+			DiameterData requestData = null;
 			try {
-				TransactionData transactionData = requestQueue.take();
+				requestData = requestQueue.take();
+
+				/* stats no of request incremented */
+				stats.addRequest();
+
+				logger.info("Request Received at DC" + requestData + ", Queue:" + requestQueue.size());
+
+				boolean isProxy = false;
+
+				if (requestData.getIsDigest())
+					isProxy = Config.isDigestSLF;
+				else
+					isProxy = Config.isGbuSLF;
+
 				MARMessage mar = new MARMessage(diameterServer.getOriginIp(), diameterServer.getOriginRelam(),
 						diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
-						diameterServer.getVendorId(), diameterServer.getAuthApp(), transactionData.getIMPI(),
-						transactionData.getTid());
-				logger.info("Send MAR : " + mar);
-				sendRequest(mar);
+						diameterServer.getVendorId(), diameterServer.getAuthApp(), requestData.getImpi(),
+						requestData.getTid(), isProxy, requestData.getAuthenticationScheme(),
+						requestData.getAuthorization());
+				DiameterClient.addSession(requestData);
+				sendMessage(mar);
+				logger.info("MAR : " + mar);
+
 				/* for DWR */
 				this.lastRequestSend = System.currentTimeMillis();
 				window.incrementAndGet();
-				logger.debug("windo incremented " + window.get());
+				logger.debug("window " + window.get());
 
 			} catch (Exception e) {
 				logger.error(this + e.getMessage(), e);
+
+				/* if Connection Breaks start monitoring and reconnect */
+				new Thread(this::monitor).start();
+				break;
 			}
 		}
 	}
 
-	public void putResponseQueue() {
-		logger.info("Receiver Thread From Server to Client Started : " + this);
+	private void readFromServerStream() {
+		logger.info(Thread.currentThread().getName() + " Started ");
+
 		while (true) {
 			try {
-				Message response = readFromServer();
+				if (isMonitorThreadRunning) {
+					logger.info("Receiver Thread From Server to Client Stopped : " + this);
+					break;
+				}
+				Message response = readMessage();
 				// System.out.println("I have read something from server......");
 				int resultCode = new AVP_Unsigned32(response.find(ProtocolConstants.DI_RESULT_CODE)).queryValue();
+
 				switch (response.hdr.command_code) {
 				case ProtocolConstants.DIAMETER_MULTIMEDIA_AUTHENTICATION_REQUEST:
-					NetworkData responseData = new NetworkData();
-					responseData.setImpi(new AVP_UTF8String(response.find(1)).queryValue());
-					responseData
-							.setTid(new AVP_UTF8String(response.find(ProtocolConstants.DI_SESSION_ID)).queryValue());
-					if (resultCode == 2001) {
-						// 612 = group
-						responseData.setResult(true);
-						String iteamNumber = "not found";
-						AVP allData[] = null;
-						/*
-						 * for (AVP avp :response.avps()) { System.out.println("from loop : "+avp.code);
-						 * }
-						 */
-						AVP_Grouped data = new AVP_Grouped(response.find(612));
-						allData = data.queryAVPs();
-						// System.out.println("using find method : "+allData);
 
-						// Iterator<AVP> iterator = response.avps();
-						for (int i = 0; i < allData.length; i++) {
-							if (allData[i].code == 608) {
-								// AVP_UTF8String dd = (AVP_UTF8String) allData[i];
-								// responseData.setAuthenticationScheme(dd.queryValue());
-								responseData.setAuthenticationScheme(new String(allData[i].queryPayload()));
-							} else if (allData[i].code == 609) {
-								responseData.setAuthenticate(new String(allData[i].queryPayload()));
-							} else if (allData[i].code == 610) {
-								// AVP_UTF8String dd = (AVP_UTF8String) allData[i];
-								responseData.setAuthorization(new String(allData[i].queryPayload()));
-							} else if (allData[i].code == 625) {
-								// AVP_UTF8String dd = (AVP_UTF8String) allData[i];
-								responseData.setConfidentialityKey(new String(allData[i].queryPayload()));
-							} else if (allData[i].code == 626) {
-								// AVP_UTF8String dd = (AVP_UTF8String) allData[i];
-								responseData.setIntegrityKey(new String(allData[i].queryPayload()));
-							} else {
-								System.out.println("something else avp is received [" + allData[i].code + "]");
-							}
+					/* Stats add for response */
+					stats.addResponse(resultCode);
+					DiameterData responseData = parseMAA(response, resultCode);
 
-						} /*
-							 * responseData.setAuthenticationScheme(new
-							 * AVP_UTF8String(response.find(608)).queryValue());
-							 * responseData.setAuthenticate(new
-							 * AVP_UTF8String(response.find(609)).queryValue());
-							 * responseData.setAuthorization(new
-							 * AVP_UTF8String(response.find(610)).queryValue());
-							 * responseData.setConfidentialityKey(new
-							 * AVP_UTF8String(response.find(625)).queryValue());
-							 * responseData.setIntegrityKey(new
-							 * AVP_UTF8String(response.find(626)).queryValue());
-							 */
-					} else {
-						responseData.setResult(false);
-					}
-					logger.info("Received MAR " + response);
+					DiameterClient.removeSession(responseData);
+					logger.info("MAA : " + responseData + ", Queue:" + responseQueue.size());
+					CdrWriter.write(responseData);
+					window.decrementAndGet();
 					responseQueue.put(responseData);
 					break;
 				case ProtocolConstants.DIAMETER_COMMAND_CAPABILITIES_EXCHANGE:
-					logger.info("Received CEA " + response);
+					logger.info("CEA " + response);
 
 					break;
 				case ProtocolConstants.DIAMETER_COMMAND_DISCONNECT_PEER: // DPA
-					logger.info("Received DPA " + response);
+					logger.info("DPA " + response);
 					break;
 				case ProtocolConstants.DIAMETER_COMMAND_DEVICE_WATCHDOG: // DWA
-					logger.info("Received DWA " + response);
+					logger.info("DWA " + response);
 					if (resultCode == 2001) {
 
 					} else {
 						DPRMessage dprMessage = new DPRMessage(diameterServer.getOriginIp(),
 								diameterServer.getOriginRelam(), 2);
 						logger.info("Send DPR " + dprMessage);
-						sendRequest(dprMessage);
-
+						sendMessage(dprMessage);
 					}
 
 					break;
@@ -343,7 +352,85 @@ public class Client {
 			} catch (Exception e) {
 				logger.error(this + e.getMessage(), e);
 			}
+
 		}
+	}
+
+	private void statsMonitor() {
+		logger.info(Thread.currentThread().getName() + " Started ");
+		while (true) {
+			try {
+				TimeUnit.MINUTES.sleep(Config.statsTimeInMinute);
+				Stats oldStats = stats;
+				stats = new Stats(diameterServer.getOriginRelam());
+				statsQueue.put(oldStats);
+
+			} catch (Exception e) {
+				logger.error(e.getMessage(), e);
+			}
+		}
+	}
+
+	private DiameterData parseMAA(Message response, int resultCode) {
+		DiameterData responseData = new DiameterData();
+		try {
+
+			responseData.setImpi(new AVP_UTF8String(response.find(1)).queryValue());
+			responseData.setTid(new AVP_UTF8String(response.find(ProtocolConstants.DI_SESSION_ID)).queryValue());
+			if (resultCode == 2001) {
+				// 612 = group
+				responseData.setResult(resultCode);
+
+				AVP sipAuthDataAVP = response.find(612);
+				if (sipAuthDataAVP != null) {
+					AVP_Grouped data = new AVP_Grouped(sipAuthDataAVP);
+					AVP allData[] = data.queryAVPs();
+					String iteamNumber = "not found";
+					for (int i = 0; i < allData.length; i++) {
+						if (allData[i].code == 608) {
+							responseData.setAuthenticationScheme(new String(allData[i].queryPayload()));
+						} else if (allData[i].code == 609) {
+							responseData.setAuthenticate(new String(allData[i].queryPayload()));
+						} else if (allData[i].code == 610) {
+							responseData.setAuthorization(new String(allData[i].queryPayload()));
+						} else if (allData[i].code == 625) {
+							responseData.setConfidentialityKey(new String(allData[i].queryPayload()));
+						} else if (allData[i].code == 626) {
+							responseData.setIntegrityKey(new String(allData[i].queryPayload()));
+						} else {
+							logger.info("something else avp is received [" + allData[i].code + "]");
+						}
+
+					}
+				}
+
+				AVP sipDigestAuthenticateAVP = response.find(635);
+				if (sipDigestAuthenticateAVP != null) {
+					AVP_Grouped data = new AVP_Grouped(sipDigestAuthenticateAVP);
+					AVP allData[] = data.queryAVPs();
+					String iteamNumber = "not found";
+					for (int i = 0; i < allData.length; i++) {
+						if (allData[i].code == 104) {
+							responseData.setDigestRealm(new String(allData[i].queryPayload()));
+						} else if (allData[i].code == 111) {
+							responseData.setDigestAlgo(new String(allData[i].queryPayload()));
+						} else if (allData[i].code == 110) {
+							responseData.setDigestQOP(new String(allData[i].queryPayload()));
+						} else if (allData[i].code == 121) {
+							responseData.setDigestHA1(new String(allData[i].queryPayload()));
+						} else {
+							logger.info("something else avp is received [" + allData[i].code + "]");
+						}
+
+					}
+				}
+			} else {
+				responseData.setResult(resultCode);
+			}
+		} catch (Exception e) {
+			logger.error(e.getMessage(), e);
+		}
+		return responseData;
 	}
 
 	@Override

@@ -149,9 +149,7 @@ public class MessageHeader {
 
 	@Override
 	public String toString() {
-		return "MessageHeader [version=" + version + ", command_flags=" + command_flags + ", command_code="
-				+ command_code + ", application_id=" + application_id + ", hop_by_hop_identifier="
-				+ hop_by_hop_identifier + ", end_to_end_identifier=" + end_to_end_identifier + "]";
+		return command_code + "";
 	}
 
 }
