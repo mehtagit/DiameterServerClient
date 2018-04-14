@@ -18,14 +18,14 @@ public class Main {
 			 * (Exception e) { e.printStackTrace(); } } }).start();
 			 */
 
-			for (int i = 1; i <= 10000; i++) {
+			for (int i = 1; i <= 50; i++) {
 				DiameterData transactionData = new DiameterData();
 				transactionData.setImpi("IMPI---" + i);
 				transactionData.setTid(System.currentTimeMillis() + "");
 				transactionData.setDcNetworkTime(System.currentTimeMillis());
 				transactionData.setIsDigest(false);
 				diameterClient.put(transactionData);
-				TimeUnit.MILLISECONDS.sleep(2);
+				TimeUnit.MILLISECONDS.sleep(500);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();

@@ -68,6 +68,7 @@ public class Config {
 					diameterServer.setOriginPort(Integer.parseInt(prop.getProperty("origin-port-" + i)));
 					diameterServer.setVendorId(Integer.parseInt(prop.getProperty("vendor-id-" + i)));
 					diameterServer.setAuthApp(Integer.parseInt(prop.getProperty("auth-app-" + i)));
+					diameterServer.setDwrTimeInSeconds(Integer.parseInt(prop.getProperty("dwr-time-in-seconds-" + i)));
 				} catch (Exception e) {
 					throw new Exception(
 							"destination-port , origin-port , vendor-id and auth-app in property file must be integer");

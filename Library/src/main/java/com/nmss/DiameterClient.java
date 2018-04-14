@@ -116,6 +116,7 @@ public class DiameterClient {
 				logger.debug("Not Found in session map, Not able to calculate time" + responseData);
 				return;
 			}
+			responseData.setRequestType(requestData.getRequestType());
 			responseData.setDcNetworkTime(System.currentTimeMillis() - requestData.getDcNetworkTime());
 		}
 	}

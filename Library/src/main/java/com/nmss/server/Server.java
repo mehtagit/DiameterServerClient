@@ -20,7 +20,7 @@ public class Server {
 		while (true) {
 			System.out.println("Waiting for connection");
 
-			final Socket connection = server.accept();
+			Socket connection = server.accept();
 			System.out.println("Accepted");
 
 			ServerRequestHandler requestHandler = new ServerRequestHandler();

@@ -5,6 +5,7 @@ import java.io.DataOutputStream;
 import java.net.Socket;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.logging.log4j.LogManager;
@@ -15,6 +16,8 @@ import com.nmss.messages.CERMessage;
 import com.nmss.messages.DPRMessage;
 import com.nmss.messages.DWRMessage;
 import com.nmss.messages.MARMessage;
+import com.nmss.messages.UDRMessage;
+import com.nmss.messages.ZxSsoOrDigestMessage;
 import com.nmss.pojo.DiameterServer;
 import com.nmss.pojo.Stats;
 import com.nmss.pojo.DiameterData;
@@ -44,7 +47,7 @@ public class Client {
 	private DiameterServer diameterServer;
 	private long lastRequestSend;
 	private AtomicInteger window;
-	private Boolean isMonitorThreadRunning;
+	private AtomicBoolean isMonitorThreadRunning;
 	private Stats stats;
 
 	public Client(String serverIP, int serverPort, String localIP, int localPort) {
@@ -53,7 +56,7 @@ public class Client {
 		this.localIP = localIP;
 		this.localPort = localPort;
 		this.window = new AtomicInteger(0);
-		this.isMonitorThreadRunning = false;
+		this.isMonitorThreadRunning = new AtomicBoolean(false);
 		logger.debug(this + " object created successfully ");
 	}
 
@@ -68,7 +71,7 @@ public class Client {
 		this.localIP = diameterServer.getOriginIp();
 		this.localPort = diameterServer.getOriginPort();
 		this.window = new AtomicInteger(0);
-		this.isMonitorThreadRunning = false;
+		this.isMonitorThreadRunning = new AtomicBoolean(false);
 		this.lastRequestSend = System.currentTimeMillis();
 		this.stats = new Stats(diameterServer.getOriginRelam());
 		new Thread(this::statsMonitor, Thread.currentThread().getName() + "-Stats").start();
@@ -77,11 +80,32 @@ public class Client {
 
 	private void disConnect() {
 		try {
-			// in.close();
-			// out.close();
-			clientSocket.shutdownInput();
-			clientSocket.shutdownOutput();
-			clientSocket.close();
+
+			try {
+				in.close();
+				in = null;
+			} catch (Exception e) {
+				in = null;
+			}
+			;
+			try {
+				out.close();
+				out = null;
+			} catch (Exception e) {
+				out = null;
+			}
+			try {
+				clientSocket.shutdownInput();
+			} catch (Exception e) {
+			}
+			try {
+				clientSocket.shutdownOutput();
+			} catch (Exception e) {
+			}
+			try {
+				clientSocket.close();
+			} catch (Exception e) {
+			}
 
 			logger.info("Disconnected from server " + this);
 		} catch (Exception e) {
@@ -106,12 +130,14 @@ public class Client {
 		return isConnected;
 	}
 
-	private void sendMessage(Message message) {
+	private boolean sendMessage(Message message) {
 		try {
 			out.write(message.encode());
 			out.flush();
+			return true;
 		} catch (Exception e) {
 			logger.error(this + e.getMessage(), e);
+			return false;
 		}
 	}
 
@@ -120,6 +146,7 @@ public class Client {
 		byte version[] = new byte[1];
 		byte data[] = new byte[20000];
 		byte total_data[] = null;
+		Message message = null;
 		try {
 
 			while (in.read(data, 0, 1) == -1) {
@@ -143,8 +170,11 @@ public class Client {
 		} catch (Exception e) {
 			logger.error(this + e.getMessage(), e);
 		}
-		Message message = new Message();
-		message.decode(total_data);
+
+		if (total_data != null) {
+			message = new Message();
+			message.decode(total_data);
+		}
 		return message;
 	}
 
@@ -186,8 +216,8 @@ public class Client {
 
 	public void monitor() {
 		logger.info(Thread.currentThread().getName() + " Started ");
-		if (!isMonitorThreadRunning) {
-			isMonitorThreadRunning = true;
+		if (!isMonitorThreadRunning.get()) {
+			isMonitorThreadRunning.set(true);
 			logger.info(this + " trying to make connection");
 			try {
 				while (!connect()) {
@@ -216,7 +246,7 @@ public class Client {
 				}
 
 				/* Monitor Thread is connected successfully no connection monitoring is off */
-				isMonitorThreadRunning = false;
+				isMonitorThreadRunning.set(false);
 				// Start DWR Thread
 				Thread dwrThread = new Thread(this::dwrTask, Thread.currentThread().getName() + "-DWR");
 				dwrThread.setDaemon(true);
@@ -235,7 +265,7 @@ public class Client {
 		logger.info(Thread.currentThread().getName() + " Started ");
 		while (true) {
 			/* if connection breaks */
-			if (isMonitorThreadRunning) {
+			if (isMonitorThreadRunning.get()) {
 				logger.info("DWR Thread Stopped " + this);
 				break;
 			}
@@ -246,12 +276,20 @@ public class Client {
 							diameterServer.getOriginRelam(), diameterServer.getDestinationIP(),
 							diameterServer.getDestinationRelam());
 					logger.info("Send DWR : " + dwrMessage);
-					sendMessage(dwrMessage);
+					if (!sendMessage(dwrMessage)) {
+						throw new Exception(
+								Thread.currentThread().getName() + " Client Disconnected Going to reconnect");
+					}
 
 				}
-				TimeUnit.SECONDS.sleep(5);
+				TimeUnit.SECONDS.sleep(diameterServer.getDwrTimeInSeconds());
 			} catch (Exception e) {
 				logger.error(this + e.getMessage(), e);
+
+				/* if Connection Breaks start monitoring and reconnect */
+				disConnect();
+				new Thread(this::monitor).start();
+				break;
 			}
 		}
 	}
@@ -261,6 +299,10 @@ public class Client {
 		while (true) {
 			DiameterData requestData = null;
 			try {
+				if (isMonitorThreadRunning.get()) {
+					logger.info(Thread.currentThread().getName() + " Stopped ");
+					break;
+				}
 				requestData = requestQueue.take();
 
 				/* stats no of request incremented */
@@ -268,21 +310,53 @@ public class Client {
 
 				logger.info("Request Received at DC" + requestData + ", Queue:" + requestQueue.size());
 
-				boolean isProxy = false;
+				Message message = null;
+				switch (requestData.getRequestType()) {
+				case MAR:
+					boolean isProxy = false;
+					if (requestData.getIsDigest())
+						isProxy = Config.isDigestSLF;
+					else
+						isProxy = Config.isGbuSLF;
 
-				if (requestData.getIsDigest())
-					isProxy = Config.isDigestSLF;
-				else
-					isProxy = Config.isGbuSLF;
+					message = new MARMessage(diameterServer.getOriginIp(), diameterServer.getOriginRelam(),
+							diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
+							diameterServer.getVendorId(), diameterServer.getAuthApp(), requestData.getImpi(),
+							requestData.getTid(), isProxy, requestData.getAuthenticationScheme(),
+							requestData.getAuthorization());
+					break;
+				case UDR:
+					message = new UDRMessage(diameterServer.getOriginIp(), diameterServer.getOriginRelam(),
+							diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
+							diameterServer.getVendorId(), diameterServer.getAuthApp(), requestData.getImpi(),
+							requestData.getTid(), requestData.getIMPU(), requestData.getMsisdn(),
+							requestData.getDataReference(), null, null, null, null, null, null, null, null, null, null,
+							null, null, null);
+					break;
+				case ZX_SSO:
+					message = new ZxSsoOrDigestMessage(diameterServer.getOriginIp(), diameterServer.getOriginRelam(),
+							diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
+							diameterServer.getVendorId(), diameterServer.getAuthApp(), requestData.getImpi(),
+							requestData.getTid(), requestData.getIMPU());
+					break;
+				case ZX_DIGEST:
+					message = new ZxSsoOrDigestMessage(diameterServer.getOriginIp(), diameterServer.getOriginRelam(),
+							diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
+							diameterServer.getVendorId(), diameterServer.getAuthApp(), requestData.getImpi(),
+							requestData.getTid(), requestData.getIMPU(), requestData.getDigestUsername(),
+							requestData.getDigestRealm(), requestData.getDigestNonce(), requestData.getDigestResponse(),
+							requestData.getDigestAlgorithm(), requestData.getDigestCNonce(), requestData.getDigestQOP(),
+							requestData.getDigestNonceCount(), requestData.getEricssonDigestHA2());
+					break;
+				default:
+					break;
+				}
 
-				MARMessage mar = new MARMessage(diameterServer.getOriginIp(), diameterServer.getOriginRelam(),
-						diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
-						diameterServer.getVendorId(), diameterServer.getAuthApp(), requestData.getImpi(),
-						requestData.getTid(), isProxy, requestData.getAuthenticationScheme(),
-						requestData.getAuthorization());
 				DiameterClient.addSession(requestData);
-				sendMessage(mar);
-				logger.info("MAR : " + mar);
+				if (!sendMessage(message)) {
+					throw new Exception(Thread.currentThread().getName() + " Client Disconnected Going to reconnect");
+				}
+				logger.info("MAR : " + message);
 
 				/* for DWR */
 				this.lastRequestSend = System.currentTimeMillis();
@@ -292,6 +366,7 @@ public class Client {
 			} catch (Exception e) {
 				logger.error(this + e.getMessage(), e);
 
+				disConnect();
 				/* if Connection Breaks start monitoring and reconnect */
 				new Thread(this::monitor).start();
 				break;
@@ -301,54 +376,83 @@ public class Client {
 
 	private void readFromServerStream() {
 		logger.info(Thread.currentThread().getName() + " Started ");
-
+		DiameterData responseData = null;
 		while (true) {
 			try {
-				if (isMonitorThreadRunning) {
+				if (isMonitorThreadRunning.get()) {
 					logger.info("Receiver Thread From Server to Client Stopped : " + this);
 					break;
 				}
 				Message response = readMessage();
-				// System.out.println("I have read something from server......");
-				int resultCode = new AVP_Unsigned32(response.find(ProtocolConstants.DI_RESULT_CODE)).queryValue();
+				if (response != null) {
+					// System.out.println("I have read something from server......");
 
-				switch (response.hdr.command_code) {
-				case ProtocolConstants.DIAMETER_MULTIMEDIA_AUTHENTICATION_REQUEST:
+					switch (response.hdr.command_code) {
+					case ProtocolConstants.DIAMETER_MULTIMEDIA_AUTHENTICATION_REQUEST:
+						int resultCode = new AVP_Unsigned32(response.find(ProtocolConstants.DI_RESULT_CODE))
+								.queryValue();
+						/* Stats add for response */
+						stats.addResponse(resultCode);
+						responseData = parseMAA(response, resultCode);
 
-					/* Stats add for response */
-					stats.addResponse(resultCode);
-					DiameterData responseData = parseMAA(response, resultCode);
+						DiameterClient.removeSession(responseData);
+						logger.info("MAA : " + responseData + ", Queue:" + responseQueue.size());
+						CdrWriter.write(responseData);
+						window.decrementAndGet();
+						responseQueue.put(responseData);
+						break;
+					case ProtocolConstants.DIAMETER_USER_DATA_REQUEST:
+						window.decrementAndGet();
 
-					DiameterClient.removeSession(responseData);
-					logger.info("MAA : " + responseData + ", Queue:" + responseQueue.size());
-					CdrWriter.write(responseData);
-					window.decrementAndGet();
-					responseQueue.put(responseData);
-					break;
-				case ProtocolConstants.DIAMETER_COMMAND_CAPABILITIES_EXCHANGE:
-					logger.info("CEA " + response);
+						responseData = parseUDA(response);
+						stats.addResponse(responseData.getResult());
 
-					break;
-				case ProtocolConstants.DIAMETER_COMMAND_DISCONNECT_PEER: // DPA
-					logger.info("DPA " + response);
-					break;
-				case ProtocolConstants.DIAMETER_COMMAND_DEVICE_WATCHDOG: // DWA
-					logger.info("DWA " + response);
-					if (resultCode == 2001) {
+						DiameterClient.removeSession(responseData);
+						logger.info("UDA : " + responseData + ", Queue:" + responseQueue.size());
+						CdrWriter.write(responseData);
+						window.decrementAndGet();
+						responseQueue.put(responseData);
 
-					} else {
-						DPRMessage dprMessage = new DPRMessage(diameterServer.getOriginIp(),
-								diameterServer.getOriginRelam(), 2);
-						logger.info("Send DPR " + dprMessage);
-						sendMessage(dprMessage);
+						break;
+					case ProtocolConstants.DIAMETER_ZX_SSO_MULTIMEDIA_AUTHENTICATION_REQUEST:
+						window.decrementAndGet();
+
+						responseData = parseZx(response);
+						stats.addResponse(responseData.getResult());
+
+						DiameterClient.removeSession(responseData);
+						logger.info("ZxSsoOrDigest : " + responseData + ", Queue:" + responseQueue.size());
+						CdrWriter.write(responseData);
+						window.decrementAndGet();
+						responseQueue.put(responseData);
+						break;
+					case ProtocolConstants.DIAMETER_COMMAND_CAPABILITIES_EXCHANGE:
+						logger.info("CEA " + response);
+
+						break;
+					case ProtocolConstants.DIAMETER_COMMAND_DISCONNECT_PEER: // DPA
+						logger.info("DPA " + response);
+						break;
+					case ProtocolConstants.DIAMETER_COMMAND_DEVICE_WATCHDOG: // DWA
+						logger.info("DWA " + response);
+						resultCode = new AVP_Unsigned32(response.find(ProtocolConstants.DI_RESULT_CODE)).queryValue();
+						if (resultCode == 2001) {
+
+						} else {
+							DPRMessage dprMessage = new DPRMessage(diameterServer.getOriginIp(),
+									diameterServer.getOriginRelam(), 2);
+							logger.info("Send DPR " + dprMessage);
+							sendMessage(dprMessage);
+						}
+
+						break;
+					default:
+						logger.warn("Some unknown response got : " + response.hdr.command_code);
+						break;
 					}
-
-					break;
-				default:
-					logger.warn("Some unknown response got : " + response.hdr.command_code);
-					break;
+				} else {
+					logger.warn("Message Response is received null " + this);
 				}
-
 			} catch (Exception e) {
 				logger.error(this + e.getMessage(), e);
 			}
@@ -369,6 +473,26 @@ public class Client {
 				logger.error(e.getMessage(), e);
 			}
 		}
+	}
+
+	private DiameterData parseUDA(Message response) {
+		return parse(response);
+	}
+
+	private DiameterData parseZx(Message response) {
+		return parse(response);
+	}
+
+	private DiameterData parse(Message response) {
+		DiameterData responseData = new DiameterData();
+		Integer resultCode = null;
+		try {
+			resultCode = new AVP_Unsigned32(response.find(ProtocolConstants.DI_RESULT_CODE)).queryValue();
+			responseData.setResult(resultCode);
+		} catch (Exception e) {
+			resultCode = null;
+		}
+		return responseData;
 	}
 
 	private DiameterData parseMAA(Message response, int resultCode) {
@@ -413,7 +537,7 @@ public class Client {
 						if (allData[i].code == 104) {
 							responseData.setDigestRealm(new String(allData[i].queryPayload()));
 						} else if (allData[i].code == 111) {
-							responseData.setDigestAlgo(new String(allData[i].queryPayload()));
+							responseData.setDigestAlgorithm(new String(allData[i].queryPayload()));
 						} else if (allData[i].code == 110) {
 							responseData.setDigestQOP(new String(allData[i].queryPayload()));
 						} else if (allData[i].code == 121) {

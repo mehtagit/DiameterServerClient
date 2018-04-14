@@ -31,7 +31,7 @@ public class MARMessage extends Message {
 		this(ORIGIN_HOST, ORIGIN_REALM, DESTINATION_HOST, DESTINATION_REALM, vendor_id, AUTH_APP, IMPI, tid, isProxy);
 		if (authenticationScheme != null && authorization != null) {
 			AVP group[] = new AVP[2];
-			group[0] = new AVP_OctetString(608, authenticationScheme.getBytes());
+			group[0] = new AVP_OctetString(ProtocolConstants.DI_SIP_AUTHENTICATION_SCHEME, authenticationScheme.getBytes());
 			group[1] = new AVP_OctetString(610, authorization.getBytes());
 			this.add(new AVP_Grouped(612, group));
 		}
@@ -61,6 +61,7 @@ public class MARMessage extends Message {
 		}
 		add(new AVP_Unsigned32(ProtocolConstants.DI_AUTH_SESSION_STATE, 1));
 		add(new AVP_Address(ProtocolConstants.DI_HOST_IP_ADDRESS, inetaddress));
+		add(new AVP_UTF8String(ProtocolConstants.DI_DESTINATION_REALM, DESTINATION_REALM));
 		add(new AVP_Unsigned32(ProtocolConstants.DI_AUTH_APPLICATION_ID, AUTH_APP));
 		AVP authdata[] = new AVP[2];
 		authdata[0] = new AVP_Unsigned32(ProtocolConstants.DI_AUTH_APPLICATION_ID, AUTH_APP);

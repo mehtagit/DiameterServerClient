@@ -33,11 +33,11 @@ public class ServerRequestHandler {
 				cerMessage.decode(request);
 				cerMessage.hdr.setRequest(false);
 				AVP group[] = new AVP[5];
-				group[0] = new AVP_OctetString(608, "32".getBytes());
-				group[1] = new AVP_OctetString(609, "33".getBytes());
-				group[2] = new AVP_OctetString(610, "34".getBytes());
-				group[3] = new AVP_OctetString(625, "35".getBytes());
-				group[4] = new AVP_OctetString(626, "36".getBytes());
+				group[0] = new AVP_OctetString(608, "Digest-AKAv1-MD5".getBytes());
+				group[1] = new AVP_OctetString(609, "710c928ef8cd26254d6fbb529ef3e4d2fa68fbe26c2800000f7b5e58fda2d3f3".getBytes());
+				group[2] = new AVP_OctetString(610, "5338ec658f87c209".getBytes());
+				group[3] = new AVP_OctetString(625, "13fa77249f44d0e90f800fdee2ee8026".getBytes());
+				group[4] = new AVP_OctetString(626, "2a86f1582fe33b7e2be63750484c77ee".getBytes());
 				cerMessage.add(new AVP_Grouped(612, group));
 				cerMessage.add(new AVP_Unsigned32(268, 2001));
 				outToClient.write(cerMessage.encode());

@@ -20,6 +20,8 @@ public final class ProtocolConstants {
 	static public final int DIAMETER_COMMAND_DEVICE_WATCHDOG = 280;
 	static public final int DIAMETER_COMMAND_DISCONNECT_PEER = 282;
 	static public final int DIAMETER_MULTIMEDIA_AUTHENTICATION_REQUEST = 303;
+	static public final int DIAMETER_ZX_SSO_MULTIMEDIA_AUTHENTICATION_REQUEST = 506;
+	static public final int DIAMETER_USER_DATA_REQUEST = 306;
 
 	// AVP codes
 	static public final int DI_USER_NAME = 1;
@@ -32,6 +34,8 @@ public final class ProtocolConstants {
 	static public final int DI_ACCT_INTERIM_INTERVAL = 85;
 	static public final int DI_HOST_IP_ADDRESS = 257;
 	static public final int DI_AUTH_APPLICATION_ID = 258;
+	static public final int DI_FEATURE_LIST_ID = 629;
+	static public final int DI_FEATURE_LIST = 630;
 	static public final int DI_ACCT_APPLICATION_ID = 259;
 	static public final int DI_VENDOR_SPECIFIC_APPLICATION_ID = 260;
 	static public final int DI_REDIRECT_HOST_USAGE = 261;
@@ -40,6 +44,33 @@ public final class ProtocolConstants {
 	static public final int DI_ORIGIN_HOST = 264;
 	static public final int DI_SUPPORTED_VENDOR_ID = 265;
 	static public final int DI_VENDOR_ID = 266;
+	static public final int DI_PUBLIC_IDENTITY = 601;
+	static public final int DI_WILDCARD_PUBLIC_IDENTITY = 634;
+	static public final int DI_WILDCARD_IMPU = 636;
+	static public final int DI_SERVER_NAME = 602;
+	static public final int DI_SIP_AUTHENTICATION_SCHEME = 608;
+	static public final int DI_SERVICE_INDICATION = 704;
+	static public final int DI_SERVING_NODE_INDICATION = 714;
+	static public final int DI_DATA_REFRENCE = 703;
+	static public final int DI_IDENTITY_SET = 708;
+	static public final int DI_REQUESTED_DOMAIN = 706;
+	static public final int DI_CURRENT_LOCATION = 707;
+	static public final int DI_DSAI_TAG = 711;
+	static public final int DI_SESSION_PRIORITY = 650;
+	static public final int DI_REQUESTED_NODES = 713;
+
+	static public final int DI_ERICSSON_SIP_AUTHORIZATION = 256;
+	static public final int DI_DIGEST_ALGORITHM = 110;
+	static public final int DI_DIGEST_CNONCE = 112;
+	static public final int DI_DIGEST_NONCE = 104;
+	static public final int DI_DIGEST_NONCE_COUNT = 113;
+	static public final int DI_DIGEST_QOP = 109;
+	static public final int DI_DIGEST_REALM = 103;
+	static public final int DI_DIGEST_RESPONSE = 102;
+	static public final int DI_DIGEST_USERNAME = 114;
+	static public final int DI_ERICSSON_DIGEST_HA2 = 257;
+	static public final int DI_MSISDN = 701;
+	static public final int DI_USER_IDENTITY = 700;
 	static public final int DI_FIRMWARE_REVISION = 267;
 	static public final int DI_RESULT_CODE = 268;
 	static public final int DI_PRODUCT_NAME = 269;
@@ -72,6 +103,7 @@ public final class ProtocolConstants {
 	static public final int DI_ACCOUNTING_RECORD_TYPE = 480;
 	static public final int DI_ACCOUNTING_REALTIME_REQUIRED = 483;
 	static public final int DI_ACCOUNTING_RECORD_NUMBER = 485;
+	static public final int DI_SUPPORTED_FEATURE = 628;
 
 	// enum for DI_DISCONNECT_CAUSE (section 5.4.3)
 	static public final int DI_DISCONNECT_CAUSE_REBOOTING = 0;

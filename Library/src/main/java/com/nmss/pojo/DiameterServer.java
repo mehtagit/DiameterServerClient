@@ -18,6 +18,7 @@ public class DiameterServer {
 	private String applicationId;
 	private String product;
 	private Integer authApp;
+	private Integer dwrTimeInSeconds = 60000; /*1 Minute*/
 	private boolean isDigestTrueGbuFalse;
 
 	public String getDestinationIP() {
@@ -116,13 +117,21 @@ public class DiameterServer {
 		this.isDigestTrueGbuFalse = isDigestTrueGbuFalse;
 	}
 
+	public Integer getDwrTimeInSeconds() {
+		return dwrTimeInSeconds;
+	}
+
+	public void setDwrTimeInSeconds(Integer dwrTimeInSeconds) {
+		this.dwrTimeInSeconds = dwrTimeInSeconds;
+	}
+
 	@Override
 	public String toString() {
 		return "DiameterServer [clientId=" + clientId + ", destinationIP=" + destinationIP + ", destinationPort="
 				+ destinationPort + ", destinationRelam=" + destinationRelam + ", originIp=" + originIp
 				+ ", originPort=" + originPort + ", originRelam=" + originRelam + ", vendorId=" + vendorId
 				+ ", applicationId=" + applicationId + ", product=" + product + ", authApp=" + authApp
-				+ ", isDigestTrueGbuFalse=" + isDigestTrueGbuFalse + "]";
+				+ ", dwrTimeInSeconds=" + dwrTimeInSeconds + ", isDigestTrueGbuFalse=" + isDigestTrueGbuFalse + "]";
 	}
 
 }
