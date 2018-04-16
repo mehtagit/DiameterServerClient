@@ -27,12 +27,13 @@ public class ZxSsoOrDigestMessage extends Message {
 
 	/** ZX Digest */
 	public ZxSsoOrDigestMessage(String ORIGIN_HOST, String ORIGIN_REALM, String DESTINATION_HOST,
-			String DESTINATION_REALM, int vendor_id, int AUTH_APP, String IMPI, String tid, String IMPU,
-			String digestUsername, String digestRealm, String digestNonce, String digestResponse,
+			String DESTINATION_REALM, int vendor_id, int AUTH_APP, String IMPI, String tid, boolean isProxy,
+			String IMPU, String digestUsername, String digestRealm, String digestNonce, String digestResponse,
 			String digestAlgorithm, String digestCNonce, String digestQoP, String digestNonceCount,
 			String ericssonDigestHA2) {
 
-		this(ORIGIN_HOST, ORIGIN_REALM, DESTINATION_HOST, DESTINATION_REALM, vendor_id, AUTH_APP, IMPI, tid, IMPU);
+		this(ORIGIN_HOST, ORIGIN_REALM, DESTINATION_HOST, DESTINATION_REALM, vendor_id, AUTH_APP, IMPI, tid, isProxy,
+				IMPU);
 		add(new AVP_OctetString(ProtocolConstants.DI_SIP_AUTHENTICATION_SCHEME, "Digest".getBytes()));
 
 		AVP[] ericssonSipAuthorization = new AVP[9];
@@ -50,7 +51,8 @@ public class ZxSsoOrDigestMessage extends Message {
 
 	/** ZX SSO */
 	public ZxSsoOrDigestMessage(String ORIGIN_HOST, String ORIGIN_REALM, String DESTINATION_HOST,
-			String DESTINATION_REALM, int vendor_id, int AUTH_APP, String IMPI, String tid, String IMPU) {
+			String DESTINATION_REALM, int vendor_id, int AUTH_APP, String IMPI, String tid, boolean isProxy,
+			String IMPU) {
 
 		super.hdr.setRequest(true);
 		super.hdr.command_code = ProtocolConstants.DIAMETER_ZX_SSO_MULTIMEDIA_AUTHENTICATION_REQUEST;

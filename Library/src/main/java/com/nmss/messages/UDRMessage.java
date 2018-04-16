@@ -24,7 +24,7 @@ import dk.i1.diameter.Utils;
 public class UDRMessage extends Message {
 
 	public UDRMessage(String ORIGIN_HOST, String ORIGIN_REALM, String DESTINATION_HOST, String DESTINATION_REALM,
-			Integer vendor_id, Integer AUTH_APP, String IMPI, String tid, String IMPU, String msisdn,
+			Integer vendor_id, Integer AUTH_APP, String IMPI, String tid, boolean isProxy, String IMPU, String msisdn,
 			Integer dataReference, Integer featureListId, Integer featureList, String wildCardPublicIdentity,
 			String wildCardImpu, String serverName, String serviceIndication, Integer identitySet,
 			Integer requestedDomain, Integer currentLocation, String dsaiTag, Integer sessionPriority,
@@ -33,7 +33,8 @@ public class UDRMessage extends Message {
 		super.hdr.command_code = ProtocolConstants.DIAMETER_USER_DATA_REQUEST;
 		super.hdr.application_id = 0;
 		super.hdr.hop_by_hop_identifier = (new Random()).nextInt();
-
+		if (isProxy)
+			super.hdr.setProxiable(isProxy);
 		add(new AVP_UTF8String(ProtocolConstants.DI_SESSION_ID, tid));
 
 		AVP authdata[] = new AVP[2];

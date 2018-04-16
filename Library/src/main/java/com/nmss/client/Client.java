@@ -18,9 +18,10 @@ import com.nmss.messages.DWRMessage;
 import com.nmss.messages.MARMessage;
 import com.nmss.messages.UDRMessage;
 import com.nmss.messages.ZxSsoOrDigestMessage;
-import com.nmss.pojo.DiameterServer;
-import com.nmss.pojo.Stats;
 import com.nmss.pojo.DiameterData;
+import com.nmss.pojo.DiameterServer;
+import com.nmss.pojo.MAA;
+import com.nmss.pojo.Stats;
 import com.nmss.util.CdrWriter;
 import com.nmss.util.Config;
 
@@ -311,42 +312,46 @@ public class Client {
 				logger.info("Request Received at DC" + requestData + ", Queue:" + requestQueue.size());
 
 				Message message = null;
+				boolean isProxy = false;
+				if (Boolean.TRUE.equals(requestData.getIsDigest()))
+					isProxy = Config.isDigestSLF;
+				else
+					isProxy = Config.isGbuSLF;
+
 				switch (requestData.getRequestType()) {
 				case MAR:
-					boolean isProxy = false;
-					if (requestData.getIsDigest())
-						isProxy = Config.isDigestSLF;
-					else
-						isProxy = Config.isGbuSLF;
 
 					message = new MARMessage(diameterServer.getOriginIp(), diameterServer.getOriginRelam(),
 							diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
 							diameterServer.getVendorId(), diameterServer.getAuthApp(), requestData.getImpi(),
-							requestData.getTid(), isProxy, requestData.getAuthenticationScheme(),
-							requestData.getAuthorization());
+							requestData.getTid(), isProxy, requestData.getMar().getAuthenticationScheme(),
+							requestData.getMar().getAuthorization());
 					break;
 				case UDR:
 					message = new UDRMessage(diameterServer.getOriginIp(), diameterServer.getOriginRelam(),
 							diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
 							diameterServer.getVendorId(), diameterServer.getAuthApp(), requestData.getImpi(),
-							requestData.getTid(), requestData.getIMPU(), requestData.getMsisdn(),
-							requestData.getDataReference(), null, null, null, null, null, null, null, null, null, null,
-							null, null, null);
+							requestData.getTid(), isProxy, requestData.getUdr().getIMPU(),
+							requestData.getUdr().getMsisdn(), requestData.getUdr().getDataReference(), null, null, null,
+							null, null, null, null, null, null, null, null, null, null);
 					break;
 				case ZX_SSO:
 					message = new ZxSsoOrDigestMessage(diameterServer.getOriginIp(), diameterServer.getOriginRelam(),
 							diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
 							diameterServer.getVendorId(), diameterServer.getAuthApp(), requestData.getImpi(),
-							requestData.getTid(), requestData.getIMPU());
+							requestData.getTid(), isProxy, requestData.getZx_sso().getIMPU());
 					break;
 				case ZX_DIGEST:
 					message = new ZxSsoOrDigestMessage(diameterServer.getOriginIp(), diameterServer.getOriginRelam(),
 							diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
 							diameterServer.getVendorId(), diameterServer.getAuthApp(), requestData.getImpi(),
-							requestData.getTid(), requestData.getIMPU(), requestData.getDigestUsername(),
-							requestData.getDigestRealm(), requestData.getDigestNonce(), requestData.getDigestResponse(),
-							requestData.getDigestAlgorithm(), requestData.getDigestCNonce(), requestData.getDigestQOP(),
-							requestData.getDigestNonceCount(), requestData.getEricssonDigestHA2());
+							requestData.getTid(), isProxy, requestData.getZx_digest().getIMPU(),
+							requestData.getZx_digest().getDigestUsername(), requestData.getZx_digest().getDigestRealm(),
+							requestData.getZx_digest().getDigestNonce(), requestData.getZx_digest().getDigestResponse(),
+							requestData.getZx_digest().getDigestAlgorithm(),
+							requestData.getZx_digest().getDigestCNonce(), requestData.getZx_digest().getDigestQOP(),
+							requestData.getZx_digest().getDigestNonceCount(),
+							requestData.getZx_digest().getEricssonDigestHA2());
 					break;
 				default:
 					break;
@@ -389,42 +394,27 @@ public class Client {
 
 					switch (response.hdr.command_code) {
 					case ProtocolConstants.DIAMETER_MULTIMEDIA_AUTHENTICATION_REQUEST:
+
 						int resultCode = new AVP_Unsigned32(response.find(ProtocolConstants.DI_RESULT_CODE))
 								.queryValue();
-						/* Stats add for response */
-						stats.addResponse(resultCode);
 						responseData = parseMAA(response, resultCode);
-
-						DiameterClient.removeSession(responseData);
 						logger.info("MAA : " + responseData + ", Queue:" + responseQueue.size());
-						CdrWriter.write(responseData);
-						window.decrementAndGet();
-						responseQueue.put(responseData);
+						putResponseBackInQueue(responseData);
+
 						break;
 					case ProtocolConstants.DIAMETER_USER_DATA_REQUEST:
-						window.decrementAndGet();
 
 						responseData = parseUDA(response);
-						stats.addResponse(responseData.getResult());
-
-						DiameterClient.removeSession(responseData);
 						logger.info("UDA : " + responseData + ", Queue:" + responseQueue.size());
-						CdrWriter.write(responseData);
-						window.decrementAndGet();
-						responseQueue.put(responseData);
+						putResponseBackInQueue(responseData);
 
 						break;
 					case ProtocolConstants.DIAMETER_ZX_SSO_MULTIMEDIA_AUTHENTICATION_REQUEST:
-						window.decrementAndGet();
 
 						responseData = parseZx(response);
-						stats.addResponse(responseData.getResult());
-
-						DiameterClient.removeSession(responseData);
 						logger.info("ZxSsoOrDigest : " + responseData + ", Queue:" + responseQueue.size());
-						CdrWriter.write(responseData);
-						window.decrementAndGet();
-						responseQueue.put(responseData);
+						putResponseBackInQueue(responseData);
+
 						break;
 					case ProtocolConstants.DIAMETER_COMMAND_CAPABILITIES_EXCHANGE:
 						logger.info("CEA " + response);
@@ -457,6 +447,19 @@ public class Client {
 				logger.error(this + e.getMessage(), e);
 			}
 
+		}
+	}
+
+	private void putResponseBackInQueue(DiameterData responseData) {
+		try {
+			/* Stats add for response */
+			stats.addResponse(responseData.getResult());
+			DiameterClient.removeSession(responseData);
+			CdrWriter.write(responseData);
+			window.decrementAndGet();
+			responseQueue.put(responseData);
+		} catch (Exception e) {
+			logger.error(this + e.getMessage(), e);
 		}
 	}
 
@@ -497,6 +500,7 @@ public class Client {
 
 	private DiameterData parseMAA(Message response, int resultCode) {
 		DiameterData responseData = new DiameterData();
+		responseData.setMaa(new MAA());
 		try {
 
 			responseData.setImpi(new AVP_UTF8String(response.find(1)).queryValue());
@@ -512,15 +516,15 @@ public class Client {
 					String iteamNumber = "not found";
 					for (int i = 0; i < allData.length; i++) {
 						if (allData[i].code == 608) {
-							responseData.setAuthenticationScheme(new String(allData[i].queryPayload()));
+							responseData.getMaa().setAuthenticationScheme(new String(allData[i].queryPayload()));
 						} else if (allData[i].code == 609) {
-							responseData.setAuthenticate(new String(allData[i].queryPayload()));
+							responseData.getMaa().setAuthenticate(new String(allData[i].queryPayload()));
 						} else if (allData[i].code == 610) {
-							responseData.setAuthorization(new String(allData[i].queryPayload()));
+							responseData.getMaa().setAuthorization(new String(allData[i].queryPayload()));
 						} else if (allData[i].code == 625) {
-							responseData.setConfidentialityKey(new String(allData[i].queryPayload()));
+							responseData.getMaa().setConfidentialityKey(new String(allData[i].queryPayload()));
 						} else if (allData[i].code == 626) {
-							responseData.setIntegrityKey(new String(allData[i].queryPayload()));
+							responseData.getMaa().setIntegrityKey(new String(allData[i].queryPayload()));
 						} else {
 							logger.info("something else avp is received [" + allData[i].code + "]");
 						}
@@ -535,13 +539,13 @@ public class Client {
 					String iteamNumber = "not found";
 					for (int i = 0; i < allData.length; i++) {
 						if (allData[i].code == 104) {
-							responseData.setDigestRealm(new String(allData[i].queryPayload()));
+							responseData.getMaa().setDigestRealm(new String(allData[i].queryPayload()));
 						} else if (allData[i].code == 111) {
-							responseData.setDigestAlgorithm(new String(allData[i].queryPayload()));
+							responseData.getMaa().setDigestAlgorithm(new String(allData[i].queryPayload()));
 						} else if (allData[i].code == 110) {
-							responseData.setDigestQOP(new String(allData[i].queryPayload()));
+							responseData.getMaa().setDigestQOP(new String(allData[i].queryPayload()));
 						} else if (allData[i].code == 121) {
-							responseData.setDigestHA1(new String(allData[i].queryPayload()));
+							responseData.getMaa().setDigestHA1(new String(allData[i].queryPayload()));
 						} else {
 							logger.info("something else avp is received [" + allData[i].code + "]");
 						}
