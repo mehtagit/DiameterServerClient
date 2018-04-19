@@ -47,7 +47,7 @@ public class DiameterData {
 		this.experimentalResultCode = experimentalResultCode;
 	}
 
-	public int getResult() {
+	public Integer getResult() {
 		return result;
 	}
 

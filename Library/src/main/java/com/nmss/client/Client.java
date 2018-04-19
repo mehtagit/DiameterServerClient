@@ -324,8 +324,9 @@ public class Client {
 					message = new MARMessage(diameterServer.getOriginIp(), diameterServer.getOriginRelam(),
 							diameterServer.getDestinationIP(), diameterServer.getDestinationRelam(),
 							diameterServer.getVendorId(), diameterServer.getAuthApp(), requestData.getImpi(),
-							requestData.getTid(), isProxy, requestData.getMar().getAuthenticationScheme(),
-							requestData.getMar().getAuthorization());
+							requestData.getTid(), isProxy,
+							requestData.getMar() == null ? null : requestData.getMar().getAuthenticationScheme(),
+							requestData.getMar() == null ? null : requestData.getMar().getAuthorization());
 					break;
 				case UDR:
 					message = new UDRMessage(diameterServer.getOriginIp(), diameterServer.getOriginRelam(),

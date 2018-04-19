@@ -3,6 +3,9 @@ package com.nmss;
 import java.util.concurrent.TimeUnit;
 
 import com.nmss.pojo.DiameterData;
+import com.nmss.pojo.MAA;
+import com.nmss.pojo.MAR;
+import com.nmss.pojo.RequestType;
 
 public class Main {
 
@@ -19,13 +22,16 @@ public class Main {
 			 */
 
 			for (int i = 1; i <= 50; i++) {
-				DiameterData transactionData = new DiameterData();
-				transactionData.setImpi("IMPI---" + i);
-				transactionData.setTid(System.currentTimeMillis() + "");
-				transactionData.setDcNetworkTime(System.currentTimeMillis());
-				transactionData.setIsDigest(false);
-				diameterClient.put(transactionData);
+				DiameterData diameterData = new DiameterData();
+				diameterData.setImpi("IMPI---" + i);
+				diameterData.setTid(System.currentTimeMillis() + "");
+				diameterData.setIsDigest(false);
+				diameterData.setRequestType(RequestType.MAR);
+
+				diameterClient.put(diameterData);
+
 				TimeUnit.MILLISECONDS.sleep(500);
+
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
