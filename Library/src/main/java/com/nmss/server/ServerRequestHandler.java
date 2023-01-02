@@ -40,8 +40,9 @@ public class ServerRequestHandler {
 				group[4] = new AVP_OctetString(626, "2a86f1582fe33b7e2be63750484c77ee".getBytes());
 				cerMessage.add(new AVP_Grouped(612, group));
 				cerMessage.add(new AVP_Unsigned32(268, 2001));
+				cerMessage.add(new AVP_Unsigned32(1445, 0));
 				outToClient.write(cerMessage.encode());
-				logger.info("Send Response ");
+				System.out.println("Send Response "+ cerMessage);
 			} catch (Exception exception) {
 				exception.printStackTrace();
 			} finally {

@@ -22,6 +22,7 @@ public final class ProtocolConstants {
 	static public final int DIAMETER_MULTIMEDIA_AUTHENTICATION_REQUEST = 303;
 	static public final int DIAMETER_ZX_SSO_MULTIMEDIA_AUTHENTICATION_REQUEST = 506;
 	static public final int DIAMETER_USER_DATA_REQUEST = 306;
+	static public final int DIAMETER_ME_IDENTITY_CHECK_REQUEST = 324;
 
 	// AVP codes
 	static public final int DI_USER_NAME = 1;
@@ -104,6 +105,8 @@ public final class ProtocolConstants {
 	static public final int DI_ACCOUNTING_REALTIME_REQUIRED = 483;
 	static public final int DI_ACCOUNTING_RECORD_NUMBER = 485;
 	static public final int DI_SUPPORTED_FEATURE = 628;
+
+	static public final int DI_EQUIPMENT_STATUS = 1445;
 
 	// enum for DI_DISCONNECT_CAUSE (section 5.4.3)
 	static public final int DI_DISCONNECT_CAUSE_REBOOTING = 0;

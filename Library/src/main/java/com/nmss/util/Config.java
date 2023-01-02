@@ -33,7 +33,7 @@ public class Config {
 	public Config(String filename) throws Exception {
 		//////////// Reading properties////////////////////////////////
 
-		try (InputStream in = new FileInputStream(filename)) {
+		try (InputStream in = getClass().getClassLoader().getResourceAsStream(filename)) {
 			Properties prop = new Properties();
 			prop.load(in);
 

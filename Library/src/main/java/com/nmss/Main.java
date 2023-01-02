@@ -9,33 +9,42 @@ import com.nmss.pojo.RequestType;
 
 public class Main {
 
-	public static void main(String[] args) {
-		try {
-			DiameterClient diameterClient = new DiameterClient(args[0]);
-			diameterClient.init();
+    public static void main(String[] args) {
+        try {
 
-			/*
-			 * new Thread(() -> { while (true) { try { NetworkData transactionData =
-			 * diameterClient.getResponseQueue().take(); //
-			 * System.out.println("Recieved At Apache " + transactionData); } catch
-			 * (Exception e) { e.printStackTrace(); } } }).start();
-			 */
+//			DiameterClient diameterClient = new DiameterClient(args[0]);
 
-			for (int i = 1; i <= 50; i++) {
-				DiameterData diameterData = new DiameterData();
-				diameterData.setImpi("IMPI---" + i);
-				diameterData.setTid(System.currentTimeMillis() + "");
-				diameterData.setIsDigest(false);
-				diameterData.setRequestType(RequestType.MAR);
+            DiameterClient diameterClient = new DiameterClient("clients.properties");
+            diameterClient.init();
 
-				diameterClient.put(diameterData);
+            new Thread(() -> {
+                while (true) {
+                    try {
+                        DiameterData transactionData =
+                                diameterClient.getResponseQueue().take(); //
+                        System.out.println("Recieved At Apache " + transactionData);
+                    } catch
+                    (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }).start();
 
-				TimeUnit.MILLISECONDS.sleep(500);
+            for (int i = 1; i <= 2; i++) {
+                DiameterData diameterData = new DiameterData();
+                diameterData.setImpi("IMPI---" + i);
+                diameterData.setTid(System.currentTimeMillis() + "");
+                diameterData.setIsDigest(false);
+                diameterData.setRequestType(RequestType.ECR);
 
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
+                diameterClient.put(diameterData);
+
+                TimeUnit.MILLISECONDS.sleep(500);
+
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
 }

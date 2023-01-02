@@ -1,126 +1,148 @@
 package com.nmss.pojo;
 
 public class DiameterData {
-	private RequestType requestType;
-	private String tid;
-	private String impi;
-	private Boolean isDigest;
-	private long dcNetworkTime;
-	private MAR mar;
-	private UDR udr;
-	private ZX_SSO zx_sso;
-	private ZX_DIGEST zx_digest;
-	private MAA maa;
+    private RequestType requestType;
+    private String tid;
+    private String impi;
+    private Boolean isDigest;
+    private long dcNetworkTime;
+    private MAR mar;
+    private UDR udr;
+    private ZX_SSO zx_sso;
+    private ZX_DIGEST zx_digest;
+    private MAA maa;
 
-	private Integer result;
-	private Integer experimentalResultCode;
+    private ECA eca;
+    private Integer result;
 
-	public String getTid() {
-		return tid;
-	}
+    private Integer experimentalResultCode;
 
-	public void setTid(String tid) {
-		this.tid = tid;
-	}
+    public String getTid() {
+        return tid;
+    }
 
-	public String getImpi() {
-		return impi;
-	}
+    public void setTid(String tid) {
+        this.tid = tid;
+    }
 
-	public void setImpi(String impi) {
-		this.impi = impi;
-	}
+    public String getImpi() {
+        return impi;
+    }
 
-	public Integer isResult() {
-		return result;
-	}
+    public void setImpi(String impi) {
+        this.impi = impi;
+    }
 
-	public void setResult(Integer result) {
-		this.result = result;
-	}
+    public Integer isResult() {
+        return result;
+    }
 
-	public Integer getExperimentalResultCode() {
-		return experimentalResultCode;
-	}
 
-	public void setExperimentalResultCode(Integer experimentalResultCode) {
-		this.experimentalResultCode = experimentalResultCode;
-	}
+    public void setResult(Integer result) {
+        this.result = result;
+    }
 
-	public Integer getResult() {
-		return result;
-	}
+    public Integer getExperimentalResultCode() {
+        return experimentalResultCode;
+    }
 
-	public RequestType getRequestType() {
-		return requestType;
-	}
+    public void setExperimentalResultCode(Integer experimentalResultCode) {
+        this.experimentalResultCode = experimentalResultCode;
+    }
 
-	public void setRequestType(RequestType requestType) {
-		this.requestType = requestType;
-	}
+    public Integer getResult() {
+        return result;
+    }
 
-	public MAR getMar() {
-		return mar;
-	}
+    public RequestType getRequestType() {
+        return requestType;
+    }
 
-	public void setMar(MAR mar) {
-		this.mar = mar;
-	}
+    public void setRequestType(RequestType requestType) {
+        this.requestType = requestType;
+    }
 
-	public UDR getUdr() {
-		return udr;
-	}
+    public MAR getMar() {
+        return mar;
+    }
 
-	public void setUdr(UDR udr) {
-		this.udr = udr;
-	}
+    public void setMar(MAR mar) {
+        this.mar = mar;
+    }
 
-	public ZX_SSO getZx_sso() {
-		return zx_sso;
-	}
+    public UDR getUdr() {
+        return udr;
+    }
 
-	public void setZx_sso(ZX_SSO zx_sso) {
-		this.zx_sso = zx_sso;
-	}
+    public void setUdr(UDR udr) {
+        this.udr = udr;
+    }
 
-	public ZX_DIGEST getZx_digest() {
-		return zx_digest;
-	}
+    public ZX_SSO getZx_sso() {
+        return zx_sso;
+    }
 
-	public void setZx_digest(ZX_DIGEST zx_digest) {
-		this.zx_digest = zx_digest;
-	}
+    public void setZx_sso(ZX_SSO zx_sso) {
+        this.zx_sso = zx_sso;
+    }
 
-	public MAA getMaa() {
-		return maa;
-	}
+    public ZX_DIGEST getZx_digest() {
+        return zx_digest;
+    }
 
-	public void setMaa(MAA maa) {
-		this.maa = maa;
-	}
+    public void setZx_digest(ZX_DIGEST zx_digest) {
+        this.zx_digest = zx_digest;
+    }
 
-	public long getDcNetworkTime() {
-		return dcNetworkTime;
-	}
+    public MAA getMaa() {
+        return maa;
+    }
 
-	public void setDcNetworkTime(long dcNetworkTime) {
-		this.dcNetworkTime = dcNetworkTime;
-	}
+    public void setMaa(MAA maa) {
+        this.maa = maa;
+    }
 
-	public Boolean getIsDigest() {
-		return isDigest;
-	}
+    public long getDcNetworkTime() {
+        return dcNetworkTime;
+    }
 
-	public void setIsDigest(Boolean isDigest) {
-		this.isDigest = isDigest;
-	}
+    public void setDcNetworkTime(long dcNetworkTime) {
+        this.dcNetworkTime = dcNetworkTime;
+    }
 
-	@Override
-	public String toString() {
-		return "DiameterData [requestType=" + requestType + ", tid=" + tid + ", impi=" + impi + ", isDigest=" + isDigest
-				+ ", dcNetworkTime=" + dcNetworkTime + ", mar=" + mar + ", udr=" + udr + ", zx_sso=" + zx_sso
-				+ ", zx_digest=" + zx_digest + ", maa=" + maa + ", result=" + result + ", experimentalResultCode="
-				+ experimentalResultCode + "]";
-	}
+    public Boolean getIsDigest() {
+        return isDigest;
+    }
+
+    public void setIsDigest(Boolean isDigest) {
+        this.isDigest = isDigest;
+    }
+
+    public ECA getEca() {
+        return eca;
+    }
+
+    public void setEca(ECA eca) {
+        this.eca = eca;
+    }
+
+    @Override
+    public String toString() {
+        return "DiameterData{" +
+                "requestType=" + requestType +
+                ", tid='" + tid + '\'' +
+                ", impi='" + impi + '\'' +
+                ", isDigest=" + isDigest +
+                ", dcNetworkTime=" + dcNetworkTime +
+                ", mar=" + mar +
+                ", udr=" + udr +
+                ", zx_sso=" + zx_sso +
+                ", zx_digest=" + zx_digest +
+                ", maa=" + maa +
+                ", eca=" + eca +
+                ", result=" + result +
+                ", experimentalResultCode=" + experimentalResultCode +
+                '}';
+    }
 
 }
